@@ -22,23 +22,26 @@ export default function BrowseSpecialists() {
   const [me,       setMe]       = useState<any>(null)
   const [connected, setConnected] = useState<string[]>([])
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-  setMe(data.user)
-  if (data.user) {
-    supabase.from('connection_requests')
-      .select('receiver_id, sender_id')
-      .eq('status', 'accepted')
-      .or(`sender_id.eq.${data.user.id},receiver_id.eq.${data.user.id}`)
-      .then(({ data: conns }) => {
-        if (conns) {
-          const ids = conns.map(c => c.sender_id === data.user!.id ? c.receiver_id : c.sender_id)
-          setConnected(ids)
-        }
-      })
-  }
-})
-  }, [])
+useEffect(() => {
+  load()
+  supabase.auth.getUser().then(({ data }) => {
+    setMe(data.user)
+    if (data.user) {
+      supabase.from('connection_requests')
+        .select('receiver_id, sender_id')
+        .eq('status', 'accepted')
+        .or(`sender_id.eq.${data.user.id},receiver_id.eq.${data.user.id}`)
+        .then(({ data: conns }) => {
+          if (conns) {
+            const ids = conns.map(c =>
+              c.sender_id === data.user!.id ? c.receiver_id : c.sender_id
+            )
+            setConnected(ids)
+          }
+        })
+    }
+  })
+}, [])
 
   const load = async () => {
     setLoading(true)
