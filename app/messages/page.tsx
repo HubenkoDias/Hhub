@@ -265,12 +265,13 @@ export default function Messages() {
                       <button onClick={() => fileRef.current?.click()} title="File (max 2MB)" className="w-9 h-9 rounded-xl bg-[#EAE7E0] hover:bg-[#D8D4CB] transition-colors flex items-center justify-center text-[#0F0F0F]/50 hover:text-[#0F0F0F]"><Paperclip size={16}/></button>
                     </div>
                     <textarea
-                      className="flex-1 input resize-none py-2.5 max-h-32 min-h-[44px]"
-                      rows={1} value={text}
-                      onChange={e => setText(e.target.value)}
-                      onKeyDown={e => { if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendText() }}}
-                      placeholder="Type a message… (Enter to send)"
-                    />
+  className="flex-1 input resize-none py-2.5 max-h-32 min-h-[44px]"
+  rows={1} value={text}
+  onChange={e => setText(e.target.value)}
+  onKeyDown={e => { if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendText() }}}
+  placeholder="Type a message… (Enter to send)"
+  maxLength={2000}
+/>
                     <button onClick={sendText} disabled={!text.trim()||sending} className="w-9 h-9 rounded-xl bg-[#0F0F0F] text-white flex items-center justify-center hover:bg-[#1A1A1A] transition-colors disabled:opacity-40 flex-shrink-0">
                       <Send size={16}/>
                     </button>

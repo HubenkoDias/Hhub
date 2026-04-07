@@ -37,7 +37,8 @@ export default function Navbar() {
   }
 
   const isHome = pathname === '/'
-  const navBg  = scrolled || !isHome
+  const navBg  = true
+
     ? 'bg-[#EAE7E0]/95 backdrop-blur-md border-b border-[#D8D4CB]'
     : 'bg-transparent'
 

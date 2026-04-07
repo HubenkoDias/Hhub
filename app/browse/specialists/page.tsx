@@ -20,10 +20,24 @@ export default function BrowseSpecialists() {
   const [showF,    setShowF]    = useState(false)
   const [target,   setTarget]   = useState<any>(null)
   const [me,       setMe]       = useState<any>(null)
+  const [connected, setConnected] = useState<string[]>([])
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setMe(data.user))
-    load()
+    supabase.auth.getUser().then(({ data }) => {
+  setMe(data.user)
+  if (data.user) {
+    supabase.from('connection_requests')
+      .select('receiver_id, sender_id')
+      .eq('status', 'accepted')
+      .or(`sender_id.eq.${data.user.id},receiver_id.eq.${data.user.id}`)
+      .then(({ data: conns }) => {
+        if (conns) {
+          const ids = conns.map(c => c.sender_id === data.user!.id ? c.receiver_id : c.sender_id)
+          setConnected(ids)
+        }
+      })
+  }
+})
   }, [])
 
   const load = async () => {
@@ -113,8 +127,9 @@ export default function BrowseSpecialists() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
               {specialists.map(s => (
                 <SpecialistCard key={s.id} specialist={s}
-                  onConnect={() => me ? setTarget(s) : window.location.href='/auth/login'}
-                  isOwn={me?.id === s.user_id}/>
+        onConnect={() => me ? setTarget(s) : window.location.href='/auth/login'}
+        isOwn={me?.id === s.user_id}
+        isConnected={connected.includes(s.user_id)}/>
               ))}
             </div>
           )}
@@ -126,7 +141,7 @@ export default function BrowseSpecialists() {
   )
 }
 
-function SpecialistCard({ specialist: s, onConnect, isOwn }: any) {
+function SpecialistCard({ specialist: s, onConnect, isOwn, isConnected }: any) {
   return (
     <div className="card-hover">
       <div className="flex items-start gap-4 mb-4">
@@ -155,9 +170,13 @@ function SpecialistCard({ specialist: s, onConnect, isOwn }: any) {
         {s.hourly_rate  && <span className="flex items-center gap-1"><DollarSign size={11}/>${s.hourly_rate}/hr</span>}
       </div>
       <div className="flex gap-2">
-        <Link href={`/specialists/${s.user_id}`} className="flex-1 text-center py-2 rounded-xl text-xs font-medium bg-[#D8D4CB] hover:bg-[#ccc8bf] transition-colors">View profile</Link>
-        {!isOwn && <button onClick={onConnect} className="flex-1 py-2 rounded-xl text-xs font-medium bg-[#0F0F0F] text-[#EAE7E0] hover:bg-[#1A1A1A] transition-colors">Connect</button>}
-      </div>
+  <Link href={`/specialists/${s.user_id}`} className="flex-1 text-center py-2 rounded-xl text-xs font-medium bg-[#D8D4CB] hover:bg-[#ccc8bf] transition-colors">View profile</Link>
+  {!isOwn && (
+    isConnected
+      ? <Link href="/messages" className="flex-1 py-2 rounded-xl text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors text-center">Message</Link>
+      : <button onClick={onConnect} className="flex-1 py-2 rounded-xl text-xs font-medium bg-[#0F0F0F] text-[#EAE7E0] hover:bg-[#1A1A1A] transition-colors">Connect</button>
+  )}
+</div>
     </div>
   )
 }
