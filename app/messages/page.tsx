@@ -76,6 +76,7 @@ function MessagesInner() {
   const [qaList,    setQAList]    = useState<any[]>([])
   const [myGroupCount, setMyGroupCount] = useState(0)
   const [newGroup,  setNewGroup]  = useState({ name:'', description:'', members:[] as string[] })
+  const [lightboxImg, setLightboxImg] = useState<string|null>(null)
 
   const endRef   = useRef<HTMLDivElement>(null)
   const fileRef  = useRef<HTMLInputElement>(null)
@@ -180,7 +181,7 @@ function MessagesInner() {
       return {
         id: g.id, type:'group' as const,
         name: g.name, description: g.description || '',
-        member_count: (g.member_ids || []).length,
+        member_count: Array.isArray(g.member_ids) ? g.member_ids.length : 0,
         last_content: last?.content || '',
         last_time: last?.created_at || g.created_at,
       }
@@ -304,7 +305,7 @@ function MessagesInner() {
         <div className="flex flex-1 overflow-hidden max-w-7xl mx-auto w-full px-4 py-4 gap-3">
 
           {/* ── Sidebar ── */}
-          <div className={`w-72 flex-shrink-0 flex flex-col bg-white rounded-xl border border-[#E8E6E1] overflow-hidden ${view==='chat' ? 'hidden md:flex' : 'flex'}`}>
+          <div className="w-72 flex-shrink-0 flex flex-col bg-white rounded-xl border border-[#E8E6E1] overflow-hidden hidden md:flex">
             {/* Tabs */}
             <div className="flex border-b border-[#E8E6E1] px-1 pt-1">
               {[['list','Messages'],['requests','Requests'],['new-group','+ Group']].map(([v,l]) => (
@@ -482,9 +483,9 @@ function MessagesInner() {
                             )}
                             <div className={`rounded-2xl px-3.5 py-2.5 max-w-full ${isMe ? 'bg-[#111] text-white rounded-br-sm' : 'bg-[#F5F4F1] text-[#111] rounded-bl-sm'}`}>
                               {m.file_type==='image' && m.file_url && (
-                                <a href={m.file_url} target="_blank" rel="noopener noreferrer">
+                                <button onClick={() => setLightboxImg(m.file_url)} className="block">
                                   <img src={m.file_url} className="rounded-xl max-w-[220px] max-h-[220px] object-cover cursor-zoom-in hover:opacity-90 transition-opacity" alt=""/>
-                                </a>
+                                </button>
                               )}
                               {m.file_type==='file' && m.file_url && (
                                 <a href={m.file_url} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 text-sm hover:underline ${isMe?'text-white/80':'text-[#111]/70'}`}>
@@ -537,6 +538,13 @@ function MessagesInner() {
           </div>
         </div>
       </div>
+      {/* Image lightbox */}
+      {lightboxImg && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setLightboxImg(null)}>
+          <button className="absolute top-4 right-4 text-white/70 hover:text-white text-2xl font-light">✕</button>
+          <img src={lightboxImg} className="max-w-full max-h-full rounded-xl object-contain" alt="" onClick={e => e.stopPropagation()}/>
+        </div>
+      )}
     </>
   )
 }

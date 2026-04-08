@@ -81,14 +81,14 @@ export default function Navbar() {
             <div className="w-8 h-8 rounded-lg bg-[#111]/6 animate-pulse"/>
           ) : user ? (
             <div className="flex items-center gap-1">
-              <Link href="/messages" className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${iconBg}`} title="Messages">
-                <MessageSquare size={15} className={iconColor}/>
+              <Link href="/messages" className={`icon-btn ${solid ? "" : "icon-btn-light"}`} title="Messages">
+                <MessageSquare size={15}/>
               </Link>
-              <Link href="/favorites" className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${iconBg}`} title="Saved">
-                <Heart size={15} className={iconColor}/>
+              <Link href="/favorites" className={`icon-btn ${solid ? "" : "icon-btn-light"}`} title="Saved">
+                <Heart size={15}/>
               </Link>
-              <Link href="/notifications" className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${iconBg}`}>
-                <Bell size={15} className={iconColor}/>
+              <Link href="/notifications" className={`relative icon-btn ${solid ? "" : "icon-btn-light"}`}>
+                <Bell size={15}/>
                 {notifCount > 0 && <span className="absolute -top-0.5 -right-0.5 bg-[#C8473A] text-white text-[9px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">{notifCount > 9 ? '9+' : notifCount}</span>}
               </Link>
               <div className="relative ml-1" ref={menuRef}>

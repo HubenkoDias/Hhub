@@ -71,3 +71,19 @@ details > div { overflow:hidden; animation: faqOpen 0.3s ease forwards; }
 .flip-card:hover .flip-card-inner { transform:rotateY(180deg); }
 .flip-card-front, .flip-card-back { position:absolute; width:100%; height:100%; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:0.75rem; overflow:hidden; }
 .flip-card-back { transform:rotateY(180deg); }
+
+/* Rounded select dropdown */
+select.input { border-radius: 0.5rem; }
+select option { border-radius: 0; }
+
+/* Visible icon hover states */
+.icon-btn {
+  width: 2rem; height: 2rem;
+  border-radius: 0.5rem;
+  display: flex; align-items: center; justify-content: center;
+  transition: background-color 0.15s, color 0.15s;
+  color: rgba(17,17,17,0.5);
+}
+.icon-btn:hover { background-color: rgba(17,17,17,0.08); color: rgba(17,17,17,0.9); }
+.icon-btn-light { color: rgba(255,255,255,0.6); }
+.icon-btn-light:hover { background-color: rgba(255,255,255,0.12); color: white; }

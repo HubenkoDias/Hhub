@@ -21,6 +21,10 @@ export default function BrowseCompanies() {
   const [connected,  setConnected]  = useState<string[]>([])
 
   useEffect(() => {
+    load()
+  }, [industry, size, location])
+
+  useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setMe(data.user)
       if (data.user) {
@@ -90,7 +94,7 @@ export default function BrowseCompanies() {
                 <Filter size={16}/> Filters
                 {activeCount > 0 && <span className="bg-[#C8473A] text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">{activeCount}</span>}
               </button>
-              <button onClick={load} className="btn-accent px-6">Search</button>
+
             </div>
           </div>
         </div>

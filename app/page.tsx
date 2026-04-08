@@ -204,7 +204,7 @@ export default function Home() {
               ].map(({ value, label, suffix }, i) => (
                 <div key={i}>
                   <div style={{ fontFamily:'var(--font-display)' }} className="text-5xl md:text-6xl font-extrabold text-[#0F0F0F] tabular-nums">
-                    {value}{value > 0 ? suffix : '—'}
+                    {value > 0 ? `${value}${suffix}` : '0'}
                   </div>
                   <p className="text-[#0F0F0F]/45 text-sm mt-2 font-medium">{label}</p>
                 </div>

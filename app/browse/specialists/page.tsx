@@ -27,6 +27,11 @@ export default function BrowseSpecialists() {
   const [ratings,    setRatings]    = useState<Record<string, number>>({})
   const locRef = useRef<HTMLDivElement>(null)
 
+  // Auto-apply filters when they change
+  useEffect(() => {
+    load()
+  }, [avail, minRate, maxRate, location, skills])
+
   useEffect(() => {
     load()
     // Load all unique locations for autocomplete
@@ -127,7 +132,7 @@ export default function BrowseSpecialists() {
               </button>
             )}
             <span className="ml-auto text-sm text-[#0F0F0F]/45 font-mono">{specialists.length} specialists</span>
-            <button onClick={load} className="btn-accent px-5 py-2.5 text-sm">Apply</button>
+
           </div>
 
           {showF && (
