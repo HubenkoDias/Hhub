@@ -1,20 +1,16 @@
 import type { Metadata } from 'next'
-import { Fraunces, Inter, DM_Mono } from 'next/font/google'
+import localFont from 'next/font/local'
+import { DM_Sans, DM_Mono } from 'next/font/google'
 import './globals.css'
 
-// Fraunces — optical serif, striking, prestigious. Used by Notion, Linear-style brands
-const fraunces = Fraunces({
+// DM Sans — clean, geometric, modern. Used by major SaaS products
+const dmSans = DM_Sans({
   subsets: ['latin'],
   variable: '--font-display',
   display: 'swap',
-  weight: ['600', '700', '900'],
+  weight: ['400', '500', '600', '700'],
 })
-// Inter — the gold standard for clean UI text, highly legible
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-body',
-  display: 'swap',
-})
+
 const dmMono = DM_Mono({
   subsets: ['latin'],
   weight: ['400', '500'],
@@ -34,8 +30,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${inter.variable} ${dmMono.variable}`}>
-      <body className="font-body">{children}</body>
+    <html lang="en" className={`${dmSans.variable} ${dmMono.variable}`}>
+      <body style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{children}</body>
     </html>
   )
 }

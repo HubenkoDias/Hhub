@@ -312,19 +312,7 @@ export default function Dashboard() {
 
           {/* SETTINGS */}
           {tab === 'settings' && (
-            <div className="space-y-4">
-              <div className="card space-y-4">
-                <h2 style={{ fontFamily:'var(--font-display)' }} className="text-xl font-bold">Account settings</h2>
-                <div><label className="label">Email</label><input className="input bg-[#EAE7E0]" value={user?.email||''} disabled/></div>
-                <div><label className="label">Role</label><input className="input bg-[#EAE7E0] capitalize" value={role||''} disabled/></div>
-              </div>
-              <div className="card">
-                <h2 style={{ fontFamily:'var(--font-display)' }} className="text-xl font-bold mb-4">Danger zone</h2>
-                <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }} className="text-sm text-red-600 hover:text-red-700 font-medium border border-red-200 px-4 py-2.5 rounded-xl hover:bg-red-50 transition-colors">
-                  Log out
-                </button>
-              </div>
-            </div>
+            <SettingsTab user={user} role={role} router={router}/>
           )}
         </div>
       </div>
@@ -422,6 +410,102 @@ function PortfolioForm({ item, onChange, onSave, onDelete }: any) {
           <button onClick={handleSave} disabled={saving} className="btn-primary text-sm">{saving?'Saving…':'Save project'}</button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Settings Tab ─────────────────────────────────────────────────────────────
+function SettingsTab({ user, role, router }: any) {
+  const [passData,    setPassData]    = useState({ current:'', newPass:'', confirm:'' })
+  const [passMsg,     setPassMsg]     = useState('')
+  const [passErr,     setPassErr]     = useState('')
+  const [savingPass,  setSavingPass]  = useState(false)
+  const [emailSent,   setEmailSent]   = useState(false)
+  const [sendingVerif, setSendingVerif] = useState(false)
+  const [show,        setShow]        = useState(false)
+
+  const changePassword = async () => {
+    setPassErr(''); setPassMsg('')
+    if (!passData.newPass) { setPassErr('Enter a new password'); return }
+    if (passData.newPass.length < 8) { setPassErr('Password must be at least 8 characters'); return }
+    if (!/[A-Z]/.test(passData.newPass)) { setPassErr('Password must contain at least one uppercase letter'); return }
+    if (!/[0-9]/.test(passData.newPass)) { setPassErr('Password must contain at least one number'); return }
+    if (passData.newPass !== passData.confirm) { setPassErr('Passwords do not match'); return }
+    setSavingPass(true)
+    const { error } = await supabase.auth.updateUser({ password: passData.newPass })
+    setSavingPass(false)
+    if (error) { setPassErr(error.message); return }
+    setPassMsg('Password updated successfully!')
+    setPassData({ current:'', newPass:'', confirm:'' })
+  }
+
+  const sendVerification = async () => {
+    setSendingVerif(true)
+    const { error } = await supabase.auth.resend({ type:'signup', email: user?.email })
+    setSendingVerif(false)
+    if (!error) setEmailSent(true)
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Account info */}
+      <div className="card space-y-4">
+        <h2 className="text-xl font-bold">Account</h2>
+        <div>
+          <label className="label">Email</label>
+          <div className="flex items-center gap-3">
+            <input className="input bg-[#F5F4F1] flex-1" value={user?.email||''} disabled/>
+            {user?.email_confirmed_at ? (
+              <span className="badge-verified whitespace-nowrap">✓ Verified</span>
+            ) : (
+              <button onClick={sendVerification} disabled={sendingVerif||emailSent} className="btn-secondary text-xs px-3 py-2 whitespace-nowrap">
+                {emailSent ? 'Email sent!' : sendingVerif ? 'Sending…' : 'Verify email'}
+              </button>
+            )}
+          </div>
+          {!user?.email_confirmed_at && <p className="text-xs text-amber-600 mt-1.5">⚠ Your email is not verified. Some features may be limited.</p>}
+        </div>
+        <div>
+          <label className="label">Role</label>
+          <input className="input bg-[#F5F4F1] capitalize" value={role||''} disabled/>
+        </div>
+      </div>
+
+      {/* Change password */}
+      <div className="card space-y-4">
+        <h2 className="text-xl font-bold">Change password</h2>
+        <p className="text-sm text-[#111]/50">Password must be at least 8 characters, include an uppercase letter and a number.</p>
+        <div className="relative">
+          <label className="label">New password</label>
+          <input type={show?'text':'password'} className="input pr-10" value={passData.newPass} onChange={e=>setPassData({...passData,newPass:e.target.value})} placeholder="••••••••"/>
+          <button type="button" onClick={()=>setShow(!show)} className="absolute right-3 bottom-2.5 text-[#111]/35 hover:text-[#111]/60 text-xs">{show?'Hide':'Show'}</button>
+        </div>
+        {passData.newPass && (
+          <div className="flex gap-1.5">
+            {[passData.newPass.length>=8, /[A-Z]/.test(passData.newPass), /[0-9]/.test(passData.newPass)].map((ok,i) => (
+              <div key={i} className={`flex-1 h-1 rounded-full transition-colors ${ok?'bg-emerald-500':'bg-[#E8E6E1]'}`}/>
+            ))}
+          </div>
+        )}
+        <div>
+          <label className="label">Confirm password</label>
+          <input type="password" className="input" value={passData.confirm} onChange={e=>setPassData({...passData,confirm:e.target.value})} placeholder="••••••••"/>
+        </div>
+        {passErr && <p className="text-sm text-red-600">{passErr}</p>}
+        {passMsg && <p className="text-sm text-emerald-600">{passMsg}</p>}
+        <button onClick={changePassword} disabled={savingPass} className="btn-primary disabled:opacity-50">
+          {savingPass?'Updating…':'Update password'}
+        </button>
+      </div>
+
+      {/* Danger */}
+      <div className="card">
+        <h2 className="text-xl font-bold mb-4">Session</h2>
+        <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }}
+          className="text-sm text-red-600 font-medium border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-colors">
+          Log out
+        </button>
+      </div>
     </div>
   )
 }

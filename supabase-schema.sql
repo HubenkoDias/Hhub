@@ -296,3 +296,41 @@ CREATE INDEX IF NOT EXISTS idx_connection_requests_receiver ON connection_reques
 
 -- Add bio to team_members
 ALTER TABLE team_members ADD COLUMN IF NOT EXISTS bio TEXT;
+
+-- ============================================
+-- V5 ADDITIONS
+-- ============================================
+
+-- Group messages (separate from direct messages for clean architecture)
+CREATE TABLE IF NOT EXISTS group_messages (
+  id         UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  group_id   UUID REFERENCES group_conversations(id) ON DELETE CASCADE NOT NULL,
+  sender_id  UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  content    TEXT,
+  file_url   TEXT,
+  file_type  TEXT CHECK (file_type IN ('image','file')),
+  file_name  TEXT,
+  file_size  INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE group_messages ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Group msg access" ON group_messages FOR ALL USING (
+  EXISTS (SELECT 1 FROM group_conversations WHERE id = group_messages.group_id AND auth.uid()::text = ANY(member_ids))
+);
+
+-- Add description to group_conversations
+ALTER TABLE group_conversations ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
+
+-- Add read column to messages if not exists
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS read BOOLEAN DEFAULT FALSE;
+
+-- Enable realtime for group_messages
+ALTER PUBLICATION supabase_realtime ADD TABLE group_messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+
+-- Performance indexes
+CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_group_msgs_group ON group_messages(group_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_notifs_user ON notifications(user_id, read, created_at);
+CREATE INDEX IF NOT EXISTS idx_conn_receiver ON connection_requests(receiver_id, status);
+CREATE INDEX IF NOT EXISTS idx_qa_verified ON qa_profiles(verification_status, is_public);
