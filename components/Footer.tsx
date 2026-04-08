@@ -15,7 +15,7 @@ export default function Footer() {
             <p className="text-white/40 text-sm leading-relaxed max-w-xs">
               A QA-focused hub connecting experienced software testers with companies that need reliable quality assurance.
             </p>
-            <p className="text-white/25 text-xs font-mono mt-4">Founded by Hubenko Dmytro</p>
+            <p className="text-white/25 text-xs font-mono mt-4">Founded by Hubenko Dias</p>
           </div>
           <div>
             <p className="text-xs font-mono text-white/30 uppercase tracking-widest mb-4">Platform</p>

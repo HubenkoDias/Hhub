@@ -85,6 +85,18 @@ export default function Admin() {
     await load(); setBusy(null)
   }
 
+  const deleteUser = async (userId: string) => {
+    if (confirm !== userId) { setConfirm(userId); return }
+    setBusy(userId)
+    const { data: { user } } = await supabase.auth.getUser()
+    await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, requesterId: user?.id }),
+    })
+    await load(); setBusy(null); setConfirm(null)
+  }
+
   const togglePost = async (id: string, published: boolean) => {
     await supabase.from('blog_posts').update({ published: !published }).eq('id', id); await load()
   }
@@ -270,6 +282,11 @@ export default function Admin() {
                       <option value="company">Company</option>
                       <option value="admin">Admin</option>
                     </select>
+                    <button onClick={() => deleteUser(u.user_id)} disabled={busy===u.user_id}
+                      title={confirm===u.user_id ? 'Click again to confirm delete' : 'Delete user & all data'}
+                      className={`p-1.5 rounded-lg transition-colors ${confirm===u.user_id ? 'bg-red-600 text-white' : 'hover:bg-red-50 text-red-400'}`}>
+                      <Trash2 size={15}/>
+                    </button>
                   </div>
                 </div>
               ))}
