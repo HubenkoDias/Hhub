@@ -342,8 +342,6 @@ export default function Admin() {
               </div>
             </div>
           )}
-        </div>
-
           {/* TEAM */}
           {tab==='team' && (
             <TeamTab teamMembers={teamMembers} onReload={load} />
