@@ -266,7 +266,7 @@ function SpecialistCard({ specialist: s, rating, isFav, onFav, onConnect, isOwn,
         </Link>
         {!isOwn && (
           isConnected
-            ? <Link href="/messages" className="flex-1 py-2.5 rounded-xl text-xs font-medium bg-emerald-500 text-white hover:bg-emerald-600 transition-colors text-center">Message</Link>
+            ? <Link href={`/messages?userId=${s.user_id}`} className="flex-1 py-2.5 rounded-xl text-xs font-medium bg-emerald-500 text-white hover:bg-emerald-600 transition-colors text-center">Message</Link>
             : <button onClick={onConnect} className="flex-1 py-2.5 rounded-xl text-xs font-medium bg-[#0F0F0F] text-white hover:bg-[#1A1A1A] transition-colors">Connect</button>
         )}
       </div>

@@ -60,7 +60,7 @@ export default function SpecialistProfile() {
   const ConnectButton = () => {
     if (isOwn) return null
     if (connStatus === 'accepted') return (
-      <Link href="/messages" className="btn-accent flex items-center gap-2"><MessageSquare size={16}/> Message</Link>
+      <Link href={`/messages?userId=${userId}`} className="btn-accent flex items-center gap-2"><MessageSquare size={16}/> Message</Link>
     )
     if (connStatus === 'pending') return (
       <button disabled className="btn-secondary opacity-60 cursor-not-allowed">Request sent…</button>

@@ -334,3 +334,27 @@ CREATE INDEX IF NOT EXISTS idx_group_msgs_group ON group_messages(group_id, crea
 CREATE INDEX IF NOT EXISTS idx_notifs_user ON notifications(user_id, read, created_at);
 CREATE INDEX IF NOT EXISTS idx_conn_receiver ON connection_requests(receiver_id, status);
 CREATE INDEX IF NOT EXISTS idx_qa_verified ON qa_profiles(verification_status, is_public);
+
+-- ============================================
+-- V6 FIXES
+-- ============================================
+
+-- Fix admin seeing all users
+CREATE POLICY "Admin read all profiles" ON profiles FOR SELECT USING (
+  EXISTS (SELECT 1 FROM profiles p2 WHERE p2.user_id = auth.uid() AND p2.role = 'admin')
+);
+
+-- Add sequential display_id to profiles
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS display_id SERIAL;
+
+-- Admin can read all QA profiles (already exists but let's make sure)
+DROP POLICY IF EXISTS "Admin read all QA" ON qa_profiles;
+CREATE POLICY "Admin read all QA" ON qa_profiles FOR SELECT USING (
+  EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role = 'admin')
+);
+
+-- Admin can read all company profiles
+DROP POLICY IF EXISTS "Admin read all companies" ON company_profiles;
+CREATE POLICY "Admin read all companies" ON company_profiles FOR SELECT USING (
+  EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role = 'admin')
+);
