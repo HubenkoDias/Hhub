@@ -72,7 +72,7 @@ export default function Navbar() {
 
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-8">
-          {[['Specialists','/browse/specialists'],['Companies','/browse/companies'],['Insights','/insights'],['About','/about']].map(([l,h]) => (
+          {[['Specialists','/browse/specialists'],['Companies','/browse/companies'],['Insights','/insights'],['About','/about'],['Team','/team']].map(([l,h]) => (
             <Link key={h} href={h} className={`text-sm font-medium transition-colors duration-150 ${linkCol}`}>{l}</Link>
           ))}
         </div>

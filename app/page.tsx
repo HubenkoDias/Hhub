@@ -159,10 +159,10 @@ export default function Home() {
                       <div className="text-white/50 text-xs font-mono flex-shrink-0">{s.rate}</div>
                     </div>
                     {/* Back */}
-                    <div className="flip-card-back bg-[#C8473A] p-4 flex items-center justify-center">
-                      <Link href="/browse/specialists" className="text-white font-semibold text-sm flex items-center gap-2">
+                    <div className="flip-card-back bg-[#C8473A] p-4 flex items-center justify-center cursor-pointer" onClick={() => window.location.href='/browse/specialists'}>
+                      <span className="text-white font-semibold text-sm flex items-center gap-2">
                         View full profile <ArrowRight size={14}/>
-                      </Link>
+                      </span>
                     </div>
                   </div>
                 </div>

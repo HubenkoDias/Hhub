@@ -237,3 +237,19 @@ CREATE POLICY "Portfolio public" ON portfolio_items FOR SELECT USING (TRUE);
 CREATE POLICY "Admin notifications" ON notifications FOR ALL USING (
   EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role = 'admin')
 );
+
+-- Team members (for /team page, managed via admin)
+CREATE TABLE IF NOT EXISTS team_members (
+  id           UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  name         TEXT NOT NULL,
+  role         TEXT NOT NULL,
+  photo_url    TEXT,
+  linkedin_url TEXT,
+  sort_order   INTEGER DEFAULT 0,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE team_members ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can view team" ON team_members FOR SELECT USING (TRUE);
+CREATE POLICY "Admin manages team" ON team_members FOR ALL USING (
+  EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role = 'admin')
+);

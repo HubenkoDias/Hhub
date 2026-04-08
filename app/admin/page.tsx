@@ -20,6 +20,8 @@ export default function Admin() {
   const [newPost,  setNewPost]  = useState({ title:'', excerpt:'', content:'', category:'article' })
   const [saving,   setSaving]   = useState(false)
   const [confirm,  setConfirm]  = useState<string|null>(null)
+  const [teamMembers, setTeamMembers] = useState<any[]>([])
+  const [newMember, setNewMember] = useState({ name:'', role:'', linkedin_url:'' })
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -31,14 +33,15 @@ export default function Admin() {
   }, [])
 
   const load = async () => {
-    const [{ data: pend }, { data: qa }, { data: co }, { data: ps }, { data: users }] = await Promise.all([
+    const [{ data: pend }, { data: qa }, { data: co }, { data: ps }, { data: users }, { data: team }] = await Promise.all([
       supabase.from('qa_profiles').select('*').eq('verification_status','pending'),
       supabase.from('qa_profiles').select('*').order('created_at', { ascending:false }),
       supabase.from('company_profiles').select('*').order('created_at', { ascending:false }),
       supabase.from('blog_posts').select('*').order('created_at', { ascending:false }),
       supabase.from('profiles').select('*').order('created_at', { ascending:false }),
+      supabase.from('team_members').select('*').order('sort_order'),
     ])
-    setPending(pend||[]); setAllQA(qa||[]); setAllCo(co||[]); setPosts(ps||[]); setAllUsers(users||[])
+    setPending(pend||[]); setAllQA(qa||[]); setAllCo(co||[]); setPosts(ps||[]); setAllUsers(users||[]); setTeamMembers(team||[])
     setStats({ qa: qa?.length||0, verified: qa?.filter(q=>q.verification_status==='verified').length||0, co: co?.length||0, posts: ps?.length||0, users: users?.length||0 })
   }
 
@@ -123,6 +126,7 @@ export default function Admin() {
     { id:'companies',   label:'Companies' },
     { id:'users',       label:'All Users' },
     { id:'blog',        label:'Blog' },
+    { id:'team',        label:'Team' },
   ]
 
   return (
@@ -339,7 +343,192 @@ export default function Admin() {
             </div>
           )}
         </div>
+
+          {/* TEAM */}
+          {tab==='team' && (
+            <TeamTab teamMembers={teamMembers} onReload={load} />
+          )}
+
+        </div>
       </div>
     </>
+  )
+}
+
+// ─── Team Tab Component ───────────────────────────────────────────────────────
+function TeamTab({ teamMembers, onReload }: { teamMembers: any[], onReload: () => void }) {
+  const [editing,   setEditing]   = useState<string|null>(null)
+  const [editData,  setEditData]  = useState<any>({})
+  const [newMember, setNewMember] = useState({ name:'', role:'', linkedin_url:'' })
+  const [saving,    setSaving]    = useState(false)
+  const [adding,    setAdding]    = useState(false)
+  const [deleting,  setDeleting]  = useState<string|null>(null)
+
+  const startEdit = (m: any) => {
+    setEditing(m.id)
+    setEditData({ name: m.name, role: m.role, linkedin_url: m.linkedin_url || '' })
+  }
+
+  const saveEdit = async (id: string) => {
+    setSaving(true)
+    await supabase.from('team_members').update({
+      name: editData.name,
+      role: editData.role,
+      linkedin_url: editData.linkedin_url || null,
+    }).eq('id', id)
+    setEditing(null)
+    setSaving(false)
+    onReload()
+  }
+
+  const addMember = async () => {
+    if (!newMember.name.trim() || !newMember.role.trim()) return
+    setAdding(true)
+    await supabase.from('team_members').insert({
+      name: newMember.name.trim(),
+      role: newMember.role.trim(),
+      linkedin_url: newMember.linkedin_url.trim() || null,
+      sort_order: teamMembers.length,
+    })
+    setNewMember({ name:'', role:'', linkedin_url:'' })
+    setAdding(false)
+    onReload()
+  }
+
+  const deleteMember = async (id: string) => {
+    if (deleting !== id) { setDeleting(id); return }
+    await supabase.from('team_members').delete().eq('id', id)
+    setDeleting(null)
+    onReload()
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Add new member */}
+      <div className="card">
+        <h2 style={{ fontFamily:'var(--font-display)' }} className="text-xl font-bold mb-5">Add team member</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="label">Full name *</label>
+            <input className="input" value={newMember.name}
+              onChange={e => setNewMember({ ...newMember, name: e.target.value })}
+              placeholder="John Smith"
+              onKeyDown={e => e.key === 'Enter' && addMember()}
+            />
+          </div>
+          <div>
+            <label className="label">Role / Position *</label>
+            <input className="input" value={newMember.role}
+              onChange={e => setNewMember({ ...newMember, role: e.target.value })}
+              placeholder="QA Lead"
+              onKeyDown={e => e.key === 'Enter' && addMember()}
+            />
+          </div>
+          <div>
+            <label className="label">LinkedIn URL</label>
+            <input className="input" value={newMember.linkedin_url}
+              onChange={e => setNewMember({ ...newMember, linkedin_url: e.target.value })}
+              placeholder="https://linkedin.com/in/..."
+            />
+          </div>
+        </div>
+        <button
+          onClick={addMember}
+          disabled={adding || !newMember.name.trim() || !newMember.role.trim()}
+          className="btn-accent disabled:opacity-50"
+        >
+          {adding ? 'Adding…' : '+ Add member'}
+        </button>
+      </div>
+
+      {/* Members list */}
+      <div>
+        <h2 style={{ fontFamily:'var(--font-display)' }} className="text-xl font-bold mb-4">
+          Team members ({teamMembers.length})
+        </h2>
+
+        {teamMembers.length === 0 && (
+          <div className="card text-center py-12 text-[#0F0F0F]/40">
+            <p className="font-mono text-sm">No team members yet. Add the first one above.</p>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {teamMembers.map(m => (
+            <div key={m.id} className="card border border-[#ECEAE4]">
+              {editing === m.id ? (
+                /* Edit mode */
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="label">Name</label>
+                      <input className="input" value={editData.name}
+                        onChange={e => setEditData({ ...editData, name: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Role</label>
+                      <input className="input" value={editData.role}
+                        onChange={e => setEditData({ ...editData, role: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">LinkedIn URL</label>
+                      <input className="input" value={editData.linkedin_url}
+                        onChange={e => setEditData({ ...editData, linkedin_url: e.target.value })}
+                        placeholder="https://linkedin.com/in/..."
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => saveEdit(m.id)} disabled={saving} className="btn-primary text-sm px-4 py-2">
+                      {saving ? 'Saving…' : '✓ Save'}
+                    </button>
+                    <button onClick={() => setEditing(null)} className="btn-secondary text-sm px-4 py-2">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* View mode */
+                <div className="flex items-center gap-4">
+                  <div className="w-11 h-11 rounded-xl bg-[#EAE7E0] flex items-center justify-center flex-shrink-0 overflow-hidden border border-[#ECEAE4]">
+                    {m.photo_url
+                      ? <img src={m.photo_url} className="w-full h-full object-cover" alt={m.name}/>
+                      : <span style={{ fontFamily:'var(--font-display)' }} className="font-bold text-[#0F0F0F]/30 text-sm">{m.name?.[0]}</span>
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm">{m.name}</p>
+                    <p className="text-xs text-[#0F0F0F]/45">{m.role}</p>
+                    {m.linkedin_url && (
+                      <a href={m.linkedin_url} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-[#0F0F0F]/35 hover:text-[#0F0F0F] transition-colors font-mono truncate block max-w-xs">
+                        {m.linkedin_url}
+                      </a>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => startEdit(m)} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#EAE7E0] hover:bg-[#D8D4CB] transition-colors">
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => deleteMember(m.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        deleting === m.id
+                          ? 'bg-red-600 text-white'
+                          : 'bg-red-50 text-red-600 hover:bg-red-100'
+                      }`}
+                    >
+                      {deleting === m.id ? 'Confirm?' : 'Delete'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }

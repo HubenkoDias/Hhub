@@ -31,7 +31,7 @@ export default function BlogPost() {
           <span className="text-xs font-mono bg-black/10 px-2.5 py-1 rounded-full capitalize">{post.category.replace('-',' ')}</span>
           <h1 style={{ fontFamily:'var(--font-display)' }} className="text-4xl md:text-5xl font-bold mt-4 mb-4 leading-tight">{post.title}</h1>
           <div className="flex items-center gap-2 text-xs text-[#0F0F0F]/40 font-mono mb-8">
-            <Calendar size={12}/>{new Date(post.created_at).toLocaleDateString([],{year:'numeric',month:'long',day:'numeric'})}
+            <Calendar size={12}/>{new Date(post.created_at).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}
           </div>
           {post.cover_image_url && <img src={post.cover_image_url} className="w-full rounded-2xl mb-10 border border-[#D8D4CB]" alt={post.title}/>}
           {post.excerpt && <p className="text-lg text-[#0F0F0F]/70 leading-relaxed mb-8 font-medium border-l-2 border-[#C8473A] pl-5">{post.excerpt}</p>}
