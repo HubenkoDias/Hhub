@@ -168,3 +168,72 @@ CREATE TRIGGER post_updated  BEFORE UPDATE ON blog_posts          FOR EACH ROW E
 -- chat-files    — private, 5 MB
 -- blog-covers   — public, 5 MB
 -- ============================================
+
+-- ============================================
+-- ADDITIONAL TABLES (run these after main schema)
+-- ============================================
+
+-- Notifications
+CREATE TABLE IF NOT EXISTS notifications (
+  id         UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id    UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  type       TEXT NOT NULL,
+  title      TEXT NOT NULL,
+  message    TEXT NOT NULL DEFAULT '',
+  link       TEXT,
+  read       BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Own notifications" ON notifications FOR ALL USING (auth.uid() = user_id);
+
+-- Favorites
+CREATE TABLE IF NOT EXISTS favorites (
+  id          UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id     UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  target_id   TEXT NOT NULL,
+  target_type TEXT CHECK (target_type IN ('qa','company')) NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, target_id, target_type)
+);
+ALTER TABLE favorites ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Own favorites" ON favorites FOR ALL USING (auth.uid() = user_id);
+
+-- Reviews
+CREATE TABLE IF NOT EXISTS reviews (
+  id          UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  reviewer_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  target_id   UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  rating      INTEGER CHECK (rating >= 1 AND rating <= 5) NOT NULL,
+  comment     TEXT NOT NULL DEFAULT '',
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(reviewer_id, target_id)
+);
+ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Read reviews" ON reviews FOR SELECT USING (TRUE);
+CREATE POLICY "Write own review" ON reviews FOR INSERT WITH CHECK (auth.uid() = reviewer_id);
+CREATE POLICY "Update own review" ON reviews FOR UPDATE USING (auth.uid() = reviewer_id);
+
+-- Portfolio items for QA specialists
+CREATE TABLE IF NOT EXISTS portfolio_items (
+  id             UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  qa_profile_id  UUID REFERENCES qa_profiles(id) ON DELETE CASCADE NOT NULL,
+  title          TEXT NOT NULL,
+  company        TEXT NOT NULL DEFAULT '',
+  description    TEXT NOT NULL DEFAULT '',
+  skills_used    TEXT[] NOT NULL DEFAULT '{}',
+  start_date     DATE,
+  end_date       DATE,
+  is_current     BOOLEAN DEFAULT FALSE,
+  created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE portfolio_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Portfolio owner" ON portfolio_items FOR ALL USING (
+  EXISTS (SELECT 1 FROM qa_profiles WHERE id = portfolio_items.qa_profile_id AND user_id = auth.uid())
+);
+CREATE POLICY "Portfolio public" ON portfolio_items FOR SELECT USING (TRUE);
+
+-- Admin policies for new tables
+CREATE POLICY "Admin notifications" ON notifications FOR ALL USING (
+  EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role = 'admin')
+);
