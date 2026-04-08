@@ -75,20 +75,31 @@ export default function Home() {
   const coCount      = useCounter(stats.companies, 1600, statsInView)
   const reviewCount  = useCounter(stats.reviews,   1600, statsInView)
 
+  const [featuredSpecs, setFeaturedSpecs] = useState<any[]>([])
+
   useEffect(() => {
     Promise.all([
       supabase.from('qa_profiles').select('*', { count:'exact', head:true }).eq('verification_status','verified'),
       supabase.from('company_profiles').select('*', { count:'exact', head:true }),
       supabase.from('reviews').select('*', { count:'exact', head:true }),
-    ]).then(([qa, co, rev]) => {
+      supabase.from('qa_profiles').select('user_id,full_name,title,skills,photo_url,hourly_rate').eq('verification_status','verified').eq('is_public',true).limit(3),
+    ]).then(([qa, co, rev, specs]) => {
       setStats({ qa: qa.count||0, companies: co.count||0, reviews: rev.count||0 })
+      if (specs.data && specs.data.length > 0) setFeaturedSpecs(specs.data)
     })
   }, [])
 
-  const FEATURED = [
-    { name:'Alex M.', role:'Senior QA Engineer', skills:['Cypress','API Testing','CI/CD'], rate:'$65/hr' },
-    { name:'Sarah K.', role:'Automation Lead', skills:['Playwright','Python','Docker'], rate:'$80/hr' },
-    { name:'John D.', role:'QA Analyst', skills:['Manual Testing','JIRA','Agile'], rate:'$45/hr' },
+  // Featured from real data, fallback to examples
+  const FEATURED = featuredSpecs.length > 0 ? featuredSpecs.map(s => ({
+    name: s.full_name || 'QA Specialist',
+    role: s.title || 'QA Engineer',
+    skills: (s.skills || []).slice(0,3),
+    rate: s.hourly_rate ? `$${s.hourly_rate}/hr` : '',
+    userId: s.user_id,
+  })) : [
+    { name:'Alex M.', role:'Senior QA Engineer', skills:['Cypress','API Testing','CI/CD'], rate:'$65/hr', userId: null },
+    { name:'Sarah K.', role:'Automation Lead', skills:['Playwright','Python','Docker'], rate:'$80/hr', userId: null },
+    { name:'John D.', role:'QA Analyst', skills:['Manual Testing','JIRA','Agile'], rate:'$45/hr', userId: null },
   ]
 
   return (
@@ -126,12 +137,7 @@ export default function Home() {
               </div>
 
               <div className="flex gap-3 flex-wrap animate-fade-up d4">
-                <Link href="/browse/specialists" className="btn-accent text-base px-8 py-4 rounded-full">
-                  Hire testers <ArrowRight size={18}/>
-                </Link>
-                <Link href="/auth/register?role=qa" className="inline-flex items-center gap-2 bg-white/8 text-white border border-white/15 px-8 py-4 rounded-full font-medium text-base hover:bg-white/14 transition-all">
-                  Join as QA
-                </Link>
+                <HeroButtons/>
               </div>
             </div>
 
@@ -159,7 +165,8 @@ export default function Home() {
                       <div className="text-white/50 text-xs font-mono flex-shrink-0">{s.rate}</div>
                     </div>
                     {/* Back */}
-                    <div className="flip-card-back bg-[#C8473A] p-4 flex items-center justify-center cursor-pointer" onClick={() => window.location.href='/browse/specialists'}>
+                    <div className="flip-card-back bg-[#C8473A] p-4 flex items-center justify-center cursor-pointer"
+                      onClick={() => window.location.href = s.userId ? `/specialists/${s.userId}` : '/browse/specialists'}>
                       <span className="text-white font-semibold text-sm flex items-center gap-2">
                         View full profile <ArrowRight size={14}/>
                       </span>
@@ -307,17 +314,100 @@ export default function Home() {
             <h2 style={{ fontFamily:'var(--font-display)' }} className="text-4xl md:text-6xl font-extrabold text-white mb-6">Quality assurance,<br/>delivered right.</h2>
             <p className="text-white/70 text-lg mb-10 max-w-md mx-auto">Join companies and specialists already building better software together.</p>
             <div className="flex gap-4 justify-center flex-wrap">
-              <Link href="/browse/specialists" className="bg-white text-[#C8473A] px-8 py-4 rounded-full font-bold text-base hover:bg-white/90 transition-all hover:scale-[1.02] inline-flex items-center gap-2">
-                Hire testers <ArrowRight size={18}/>
-              </Link>
-              <Link href="/auth/register?role=qa" className="border-2 border-white/40 text-white px-8 py-4 rounded-full font-medium text-base hover:bg-white/10 transition-all inline-flex items-center gap-2">
-                Join as QA specialist
-              </Link>
+              <CTAButtons/>
             </div>
           </div>
         </section>
       </main>
       <Footer/>
+    </>
+  )
+}
+
+
+function CTAButtons() {
+  const [user, setUser] = useState<any>(undefined)
+  const [role, setRole] = useState<string|null>(null)
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) { setUser(null); return }
+      setUser(session.user)
+      const { data: p } = await supabase.from('profiles').select('role').eq('user_id', session.user.id).single()
+      if (p) setRole(p.role)
+    })
+  }, [])
+  if (user === undefined) return null
+  if (user && role === 'qa') return (
+    <Link href="/browse/specialists" className="bg-white text-[#C8473A] px-8 py-4 rounded-full font-bold text-base hover:bg-white/90 transition-all hover:scale-[1.02] inline-flex items-center gap-2">
+      Browse specialists <ArrowRight size={18}/>
+    </Link>
+  )
+  if (user && role === 'company') return (
+    <Link href="/browse/specialists" className="bg-white text-[#C8473A] px-8 py-4 rounded-full font-bold text-base hover:bg-white/90 transition-all hover:scale-[1.02] inline-flex items-center gap-2">
+      Hire testers <ArrowRight size={18}/>
+    </Link>
+  )
+  return (
+    <>
+      <Link href="/browse/specialists" className="bg-white text-[#C8473A] px-8 py-4 rounded-full font-bold text-base hover:bg-white/90 transition-all hover:scale-[1.02] inline-flex items-center gap-2">
+        Hire testers <ArrowRight size={18}/>
+      </Link>
+      <Link href="/auth/register?role=qa" className="border-2 border-white/40 text-white px-8 py-4 rounded-full font-medium text-base hover:bg-white/10 transition-all inline-flex items-center gap-2">
+        Join as QA specialist
+      </Link>
+    </>
+  )
+}
+
+
+function HeroButtons() {
+  const [user, setUser] = useState<any>(undefined)
+  const [role, setRole] = useState<string|null>(null)
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) { setUser(null); return }
+      setUser(session.user)
+      const { data: p } = await supabase.from('profiles').select('role').eq('user_id', session.user.id).single()
+      if (p) setRole(p.role)
+    })
+  }, [])
+
+  if (user === undefined) return <div className="h-14 w-64 bg-white/5 rounded-full animate-pulse"/>
+
+  if (user) {
+    // Logged in as QA: show Browse Companies
+    if (role === 'qa' || role === 'admin') return (
+      <>
+        <Link href="/browse/companies" className="btn-accent text-base px-8 py-4 rounded-full">
+          Find companies <ArrowRight size={18}/>
+        </Link>
+        <Link href="/dashboard" className="inline-flex items-center gap-2 bg-white/8 text-white border border-white/15 px-8 py-4 rounded-full font-medium text-base hover:bg-white/14 transition-all">
+          My profile
+        </Link>
+      </>
+    )
+    // Logged in as Company: show Hire testers
+    return (
+      <>
+        <Link href="/browse/specialists" className="btn-accent text-base px-8 py-4 rounded-full">
+          Hire testers <ArrowRight size={18}/>
+        </Link>
+        <Link href="/dashboard" className="inline-flex items-center gap-2 bg-white/8 text-white border border-white/15 px-8 py-4 rounded-full font-medium text-base hover:bg-white/14 transition-all">
+          My profile
+        </Link>
+      </>
+    )
+  }
+
+  // Not logged in: show both options
+  return (
+    <>
+      <Link href="/browse/specialists" className="btn-accent text-base px-8 py-4 rounded-full">
+        Hire testers <ArrowRight size={18}/>
+      </Link>
+      <Link href="/auth/register?role=qa" className="inline-flex items-center gap-2 bg-white/8 text-white border border-white/15 px-8 py-4 rounded-full font-medium text-base hover:bg-white/14 transition-all">
+        Join as QA
+      </Link>
     </>
   )
 }

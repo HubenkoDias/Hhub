@@ -253,3 +253,46 @@ CREATE POLICY "Anyone can view team" ON team_members FOR SELECT USING (TRUE);
 CREATE POLICY "Admin manages team" ON team_members FOR ALL USING (
   EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role = 'admin')
 );
+
+-- ============================================
+-- V4 ADDITIONS — run these in Supabase SQL Editor
+-- ============================================
+
+-- Add read column to messages
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS read BOOLEAN DEFAULT FALSE;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_group BOOLEAN DEFAULT FALSE;
+
+-- Group conversations
+CREATE TABLE IF NOT EXISTS group_conversations (
+  id          UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  name        TEXT NOT NULL,
+  member_ids  TEXT[] NOT NULL DEFAULT '{}',
+  created_by  UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  last_message_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE group_conversations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Group members access" ON group_conversations FOR ALL USING (
+  auth.uid()::text = ANY(member_ids)
+);
+
+-- Group messages use same messages table but filtered by is_group=true
+-- group conversation_id references group_conversations.id
+
+-- Fix storage: allow authenticated uploads to chat-files
+-- Run in Supabase Storage → chat-files bucket → Policies:
+-- INSERT: authenticated users
+-- SELECT: authenticated users  
+-- (Already done in previous schema, this is a reminder)
+
+-- Enable realtime for group_conversations
+ALTER PUBLICATION supabase_realtime ADD TABLE group_conversations;
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_messages_conv_id ON messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read);
+CREATE INDEX IF NOT EXISTS idx_connection_requests_receiver ON connection_requests(receiver_id, status);
+
+-- Add bio to team_members
+ALTER TABLE team_members ADD COLUMN IF NOT EXISTS bio TEXT;

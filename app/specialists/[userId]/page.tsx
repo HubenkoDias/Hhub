@@ -216,7 +216,7 @@ export default function SpecialistProfile() {
             {cert.image_url && <img src={cert.image_url} className="w-full rounded-2xl border border-[#ECEAE4] mb-5 object-contain max-h-64" alt="Certificate"/>}
             <div className="grid grid-cols-2 gap-4 mb-4">
               {cert.certificate_id && <div className="bg-[#F5F3EF] rounded-xl p-3"><p className="text-xs font-mono text-[#0F0F0F]/35 uppercase tracking-widest mb-1">Certificate ID</p><p className="text-sm font-mono font-medium">{cert.certificate_id}</p></div>}
-              {cert.issued_date && <div className="bg-[#F5F3EF] rounded-xl p-3"><p className="text-xs font-mono text-[#0F0F0F]/35 uppercase tracking-widest mb-1">Issued</p><p className="text-sm font-medium">{new Date(cert.issued_date).toLocaleDateString([],{year:'numeric',month:'long'})}</p></div>}
+              {cert.issued_date && <div className="bg-[#F5F3EF] rounded-xl p-3"><p className="text-xs font-mono text-[#0F0F0F]/35 uppercase tracking-widest mb-1">Issued</p><p className="text-sm font-medium">{new Date(cert.issued_date).toLocaleDateString('en-US',{year:'numeric',month:'long'})}</p></div>}
             </div>
             {cert.description && <><p className="text-xs font-mono text-[#0F0F0F]/35 uppercase tracking-widest mb-2">About</p><p className="text-sm text-[#0F0F0F]/65 leading-relaxed">{cert.description}</p></>}
           </div>

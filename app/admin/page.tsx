@@ -342,6 +342,7 @@ export default function Admin() {
               </div>
             </div>
           )}
+        </div>
 
           {/* TEAM */}
           {tab==='team' && (

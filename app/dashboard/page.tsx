@@ -366,7 +366,7 @@ function CertForm({ cert, userId, onChange, onSave, onDelete }: any) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className="label">Certificate ID</label><input className="input font-mono" value={cert.certificate_id} onChange={e => onChange({...cert,certificate_id:e.target.value})} placeholder="CTFL-123456"/></div>
-            <div><label className="label">Issue date</label><input type="date" className="input" value={cert.issued_date||''} onChange={e => onChange({...cert,issued_date:e.target.value})}/></div>
+            <div><label className="label">Issue date</label><input type="date" className="input" value={cert.issued_date||''} max={new Date().toISOString().split('T')[0]} onChange={e => onChange({...cert,issued_date:e.target.value})}/></div>
           </div>
           <div><label className="label">Description</label><textarea className="input resize-none h-20" value={cert.description} onChange={e => onChange({...cert,description:e.target.value})} placeholder="Brief description…"/></div>
           <div>
