@@ -27,11 +27,21 @@ export default function AuthPage({ mode }: { mode: 'login'|'register' }) {
         const { data, error } = await supabase.auth.signUp({ email, password: pass })
         if (error) throw error
         if (data.user) {
-          await supabase.from('profiles').insert({ user_id: data.user.id, role })
+          // Insert profile - use upsert to avoid duplicate errors
+          await supabase.from('profiles').upsert(
+            { user_id: data.user.id, role },
+            { onConflict: 'user_id' }
+          )
           if (role === 'qa') {
-            await supabase.from('qa_profiles').insert({ user_id: data.user.id, full_name: '', skills: [] })
+            await supabase.from('qa_profiles').upsert(
+              { user_id: data.user.id, full_name: '', skills: [], is_public: true, verification_status: 'pending' },
+              { onConflict: 'user_id' }
+            )
           } else {
-            await supabase.from('company_profiles').insert({ user_id: data.user.id, company_name: '' })
+            await supabase.from('company_profiles').upsert(
+              { user_id: data.user.id, company_name: '' },
+              { onConflict: 'user_id' }
+            )
           }
           router.push('/dashboard')
         }

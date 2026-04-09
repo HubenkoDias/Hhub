@@ -9,28 +9,25 @@ export interface UserProfile {
   slug?: string
 }
 
-// Session-scoped cache - cleared on page reload naturally
+// Cache only real names, not defaults
 const cache = new Map<string, UserProfile>()
 
 export async function fetchProfile(uid: string): Promise<UserProfile> {
-  // Return cached only if we have a real name (not default placeholder)
   const cached = cache.get(uid)
-  if (cached && cached.display_name !== 'QA Specialist' && cached.display_name !== 'Company' && cached.display_name !== 'User') {
+  // Return cache only if we have a real display name
+  if (cached && cached.display_name && !['QA Specialist', 'Company', 'Unknown', 'User'].includes(cached.display_name)) {
     return cached
   }
 
   try {
-    const { data: prof, error: profError } = await supabase
+    // Get role
+    const { data: prof } = await supabase
       .from('profiles')
       .select('role')
       .eq('user_id', uid)
       .single()
 
-    if (profError || !prof) {
-      return { user_id: uid, display_name: 'Unknown', photo_url: null, sub: '', role: 'qa' }
-    }
-
-    const role = prof.role as 'qa' | 'company' | 'admin'
+    const role = (prof?.role || 'qa') as 'qa' | 'company' | 'admin'
 
     if (role === 'company') {
       const { data: co } = await supabase
@@ -47,32 +44,40 @@ export async function fetchProfile(uid: string): Promise<UserProfile> {
         role: 'company',
         slug: co?.slug || undefined,
       }
-      cache.set(uid, result)
+      if (co?.company_name) cache.set(uid, result)
       return result
     }
 
-    // QA or Admin
+    // QA or Admin - get from qa_profiles
     const { data: qa } = await supabase
       .from('qa_profiles')
       .select('full_name, photo_url, title, slug')
       .eq('user_id', uid)
       .single()
 
+    // Fallback: get email from auth if no full_name
+    let displayName = qa?.full_name || ''
+    if (!displayName) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.id === uid && user?.email) {
+        displayName = user.email.split('@')[0]
+      }
+    }
+
     const result: UserProfile = {
       user_id: uid,
-      display_name: qa?.full_name || 'QA Specialist',
+      display_name: displayName || 'QA Specialist',
       photo_url: qa?.photo_url || null,
       sub: qa?.title || '',
       role,
       slug: qa?.slug || undefined,
     }
 
-    // Only cache if we got a real name
-    if (qa?.full_name) cache.set(uid, result)
+    if (displayName && displayName !== 'QA Specialist') cache.set(uid, result)
     return result
 
   } catch {
-    return { user_id: uid, display_name: 'Unknown', photo_url: null, sub: '', role: 'qa' }
+    return { user_id: uid, display_name: 'User', photo_url: null, sub: '', role: 'qa' }
   }
 }
 
