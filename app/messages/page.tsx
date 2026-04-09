@@ -252,17 +252,15 @@ function MessagesInner() {
 
   // ── Mark read - updates DB AND local state immediately ────────────────────
   const markRead = useCallback(async (convId: string, uid: string) => {
-    // Update local state first (optimistic)
+    // Optimistic local update first
     setConvs(prev => prev.map(c => c.id === convId ? { ...c, unread: 0 } : c))
-    // Then persist to DB
-    const { error } = await supabase.from('messages')
+    // Persist: mark ALL unread messages in this conv (not from me) as read
+    await supabase
+      .from('messages')
       .update({ read: true })
       .eq('conversation_id', convId)
       .neq('sender_id', uid)
       .eq('read', false)
-    if (error) {
-      console.error('markRead failed:', error)
-    }
   }, [])
 
   // ── Load convs ────────────────────────────────────────────────────────────

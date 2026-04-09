@@ -142,12 +142,14 @@ export default function Home() {
             <div className="hidden md:flex flex-col gap-3 animate-fade-up d3">
               <p className="text-white/25 text-xs font-mono tracking-widest uppercase mb-1">Featured specialists</p>
               {FEATURED.map((s, i) => (
-                <div key={i} className="flip-card h-[88px]">
+                <a key={i}
+                  href={s.userId ? `/specialists/${s.userId}` : '/browse/specialists'}
+                  className="flip-card h-[88px] block">
                   <div className="flip-card-inner h-full">
                     {/* Front */}
                     <div className="flip-card-front bg-white/5 border border-white/8 p-4 flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-                        <span style={{ fontFamily:'var(--font-display)' }} className="text-white/60 font-bold">{s.name[0]}</span>
+                        <span className="text-white/60 font-bold text-sm">{s.name[0]}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -162,14 +164,13 @@ export default function Home() {
                       <div className="text-white/50 text-xs font-mono flex-shrink-0">{s.rate}</div>
                     </div>
                     {/* Back */}
-                    <div className="flip-card-back bg-[#C8473A] p-4 flex items-center justify-center cursor-pointer"
-                      onClick={() => window.location.href = s.userId ? `/specialists/${s.userId}` : '/browse/specialists'}>
-                      <span className="text-white font-semibold text-sm flex items-center gap-2">
+                    <div className="flip-card-back bg-[#C8473A] p-4 flex items-center justify-center">
+                      <span className="text-white font-semibold text-sm flex items-center gap-2 pointer-events-none">
                         View full profile <ArrowRight size={14}/>
                       </span>
                     </div>
                   </div>
-                </div>
+                </a>
               ))}
               <Link href="/browse/specialists" className="mt-1 bg-white/6 hover:bg-white/10 text-white/60 hover:text-white text-xs font-medium py-3 rounded-xl transition-all flex items-center justify-center gap-2 border border-white/8">
                 Browse all specialists <ArrowRight size={12}/>

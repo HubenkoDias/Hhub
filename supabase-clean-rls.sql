@@ -245,3 +245,10 @@ UNION ALL SELECT
   'qa_profiles', count(*) FROM qa_profiles
 UNION ALL SELECT
   'company_profiles', count(*) FROM company_profiles;
+
+-- Fix group delete: creator can delete group and its messages
+CREATE POLICY "grp_conv_delete" ON group_conversations FOR DELETE USING (auth.uid() = created_by);
+CREATE POLICY "grp_msg_delete" ON group_messages FOR DELETE USING (
+  EXISTS (SELECT 1 FROM group_conversations WHERE id = group_id AND created_by = auth.uid())
+  OR auth.uid() = sender_id
+);
