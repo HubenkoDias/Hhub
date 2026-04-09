@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [portfolio, setPortfolio] = useState<any[]>([])
   const [loading,   setLoading]   = useState(true)
   const [saving,    setSaving]    = useState(false)
+  const [views,     setViews]     = useState<number>(0)
   const [saved,     setSaved]     = useState(false)
   const [tab,       setTab]       = useState('profile')
   const photoRef = useRef<HTMLInputElement>(null)
@@ -339,6 +340,16 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
+
+              {views > 0 && (
+                <div className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[#E8E6E1]">
+                  <div className="text-2xl font-bold text-[#111]">{views}</div>
+                  <div>
+                    <p className="text-sm font-medium">Profile views</p>
+                    <p className="text-xs text-[#111]/45">Total views on your public profile</p>
+                  </div>
+                </div>
+              )}
 
               <button onClick={saveQA} disabled={saving} className="btn-primary">
                 {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save profile'}

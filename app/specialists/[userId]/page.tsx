@@ -20,12 +20,20 @@ export default function SpecialistProfile() {
   const [me,        setMe]        = useState<any>(null)
   const [connStatus, setConnStatus] = useState<'none'|'pending'|'accepted'>('none')
   const [modal,     setModal]     = useState(false)
-  const [cert,      setCert]      = useState<any>(null)
+  const [cert,       setCert]       = useState<any>(null)
   const [lightboxImg, setLightboxImg] = useState<string|null>(null)
+  const [showReview,  setShowReview]  = useState(false)
+  const [myRating,    setMyRating]    = useState(5)
+  const [myComment,   setMyComment]   = useState('')
+  const [submitting,  setSubmitting]  = useState(false)
+  const [myReview,    setMyReview]    = useState<any>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       setMe(data.user)
+      // Load my existing review
+      const { data: myRev } = await supabase.from('reviews').select('*').eq('reviewer_id', data.user.id).eq('target_id', userId).single()
+      if (myRev) { setMyReview(myRev); setMyRating(myRev.rating); setMyComment(myRev.comment || '') }
       // Check connection status
       if (data.user) {
         const { data: conns } = await supabase
@@ -58,9 +66,32 @@ export default function SpecialistProfile() {
       if (revs && revs.length > 0) {
         setAvgRating(revs.reduce((a: number, r: any) => a + r.rating, 0) / revs.length)
       }
+      // Track view (don't await - fire and forget)
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        supabase.from('profile_views').insert({
+          profile_id: data.user_id,
+          viewer_id: session?.user?.id || null
+        }).then(() => {})
+      })
+
       setLoading(false)
     })
   }, [userId])
+
+  const submitReview = async () => {
+    if (!me || !myComment.trim()) return
+    setSubmitting(true)
+    if (myReview) {
+      await supabase.from('reviews').update({ rating: myRating, comment: myComment.trim() }).eq('id', myReview.id)
+    } else {
+      const { data: rev } = await supabase.from('reviews').insert({ reviewer_id: me.id, target_id: userId, rating: myRating, comment: myComment.trim() }).select().single()
+      if (rev) setMyReview(rev)
+    }
+    const { data: revs } = await supabase.from('reviews').select('*').eq('target_id', userId).order('created_at', { ascending: false })
+    setReviews(revs || [])
+    if (revs?.length) setAvgRating(revs.reduce((a: number, r: any) => a + r.rating, 0) / revs.length)
+    setShowReview(false); setSubmitting(false)
+  }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#0F0F0F]/20 border-t-[#0F0F0F] rounded-full animate-spin"/></div>
   if (!profile) return <><Navbar/><div className="min-h-screen pt-24 flex items-center justify-center"><h1 style={{ fontFamily:'var(--font-display)' }} className="text-4xl font-bold">Profile not found</h1></div></>
@@ -185,7 +216,34 @@ export default function SpecialistProfile() {
               )}
               {reviews.length > 0 && (
                 <div className="card">
-                  <h2 style={{ fontFamily:'var(--font-display)' }} className="text-xl font-bold mb-4">Reviews</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 style={{ fontFamily:'var(--font-display)' }} className="text-xl font-bold">Reviews</h2>
+                    {me && !isOwn && (
+                      <button onClick={() => setShowReview(!showReview)} className="text-sm text-[#C8473A] hover:underline font-medium">
+                        {myReview ? 'Edit review' : '+ Write review'}
+                      </button>
+                    )}
+                  </div>
+                  {showReview && (
+                    <div className="bg-[#F5F4F1] rounded-xl p-4 mb-4 space-y-3 border border-[#E8E6E1]">
+                      <div>
+                        <label className="label">Rating</label>
+                        <div className="flex gap-1">
+                          {[1,2,3,4,5].map(s => (
+                            <button key={s} onClick={() => setMyRating(s)} className={`text-2xl transition-transform hover:scale-110 ${s <= myRating ? 'text-amber-400' : 'text-[#E8E6E1]'}`}>★</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="label">Comment</label>
+                        <textarea className="input resize-none h-20" value={myComment} onChange={e => setMyComment(e.target.value)} placeholder="Share your experience working with this specialist…"/>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={submitReview} disabled={submitting || !myComment.trim()} className="btn-primary text-xs px-4 py-2 disabled:opacity-50">{submitting ? 'Saving…' : myReview ? 'Update' : 'Submit'}</button>
+                        <button onClick={() => setShowReview(false)} className="btn-secondary text-xs px-4 py-2">Cancel</button>
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-4">
                     {reviews.map(r => (
                       <div key={r.id} className="border-b border-[#ECEAE4] pb-4 last:border-0 last:pb-0">

@@ -137,7 +137,7 @@ export default function Navbar() {
 
           {/* Nav links */}
           <div className="hidden md:flex items-center gap-1 flex-1">
-            {[['Specialists', '/browse/specialists'], ['Companies', '/browse/companies'], ['Insights', '/insights'], ['About', '/about'], ['Team', '/team']].map(([label, href]) => {
+            {[['Specialists', '/browse/specialists'], ['Companies', '/browse/companies'], ['Jobs', '/jobs'], ['Insights', '/insights'], ['About', '/about'], ['Team', '/team']].map(([label, href]) => {
               const active = pathname === href
               return (
                 <Link key={href} href={href}
@@ -266,7 +266,7 @@ export default function Navbar() {
       {mobile && (
         <div className="md:hidden bg-white border-t border-[#E8E6E1] animate-fade-in">
           <div className="px-4 py-3 space-y-0.5">
-            {[['Specialists', '/browse/specialists'], ['Companies', '/browse/companies'], ['Insights', '/insights'], ['About', '/about'], ['Team', '/team']].map(([l, h]) => (
+            {[['Specialists', '/browse/specialists'], ['Companies', '/browse/companies'], ['Jobs', '/jobs'], ['Insights', '/insights'], ['About', '/about'], ['Team', '/team']].map(([l, h]) => (
               <Link key={h} href={h} onClick={() => setMobile(false)}
                 className="block px-3 py-2 text-sm font-medium text-[#111]/65 hover:text-[#111] hover:bg-[#F5F4F1] rounded-lg transition-colors">{l}</Link>
             ))}

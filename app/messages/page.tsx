@@ -252,9 +252,14 @@ function MessagesInner() {
 
   // ── Mark read - updates DB AND local state immediately ────────────────────
   const markRead = useCallback(async (convId: string, uid: string) => {
-    // Optimistic local update first
+    // Optimistic local update first - immediately zero the badge
     setConvs(prev => prev.map(c => c.id === convId ? { ...c, unread: 0 } : c))
-    // Persist: mark ALL unread messages in this conv (not from me) as read
+    // Also update local msgs to show as read
+    setMsgs(prev => prev.map(m =>
+      m.conversation_id === convId && m.sender_id !== uid ? { ...m, read: true } : m
+    ))
+    // Persist to DB - receiver marks sender's messages as read
+    // NOTE: requires RLS policy allowing conversation participants to update read field
     await supabase
       .from('messages')
       .update({ read: true })
@@ -448,12 +453,14 @@ function MessagesInner() {
             })
             // Mark read immediately since we're viewing this conversation
             if (msg.sender_id !== meRef.current?.id) {
+              // I'm viewing this conversation - mark as read immediately
               await supabase.from('messages').update({ read: true }).eq('id', msg.id)
               setConvs(prev => prev.map(c => c.id === active.id
-                ? { ...c, last: msg, unread: 0 }
+                ? { ...c, last: { ...msg, read: true }, unread: 0 }
                 : c
               ))
             } else {
+              // My own message - update last message in sidebar
               setConvs(prev => prev.map(c => c.id === active.id ? { ...c, last: msg } : c))
             }
           } else {

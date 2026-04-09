@@ -88,7 +88,12 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
               { onConflict: 'user_id' }
             )
           }
-          router.push('/dashboard')
+          // QA → onboarding, Company → dashboard
+          if (role === 'qa') {
+            router.push('/onboarding')
+          } else {
+            router.push('/dashboard')
+          }
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password: pass })
