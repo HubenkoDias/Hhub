@@ -2,15 +2,11 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { fetchProfile, profileLink, type UserProfile } from '@/lib/profiles'
+import { fetchProfile, profileLink, clearProfileCache, type UserProfile } from '@/lib/profiles'
 import { uploadChatFile } from '@/lib/upload'
 import Navbar from '@/components/Navbar'
 import Link from 'next/link'
-import {
-  Send, Paperclip, ImageIcon, ArrowLeft, Search,
-  Plus, Users, Check, CheckCheck, Info, UserPlus,
-  UserMinus, Trash2, X, ChevronRight
-} from 'lucide-react'
+import { Send, Paperclip, ImageIcon, ArrowLeft, Search, Plus, Users, Check, CheckCheck, Info, UserPlus, UserMinus, Trash2, X } from 'lucide-react'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtShort(ts: string) {
@@ -32,7 +28,7 @@ function fmtDate(ts: string) {
 }
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
-function Avatar({ name, photo, online = false, showStatus = false, size = 9 }: {
+function Avatar({ name, photo, online, showStatus = false, size = 9 }: {
   name: string; photo?: string | null; online?: boolean; showStatus?: boolean; size?: number
 }) {
   return (
@@ -49,123 +45,109 @@ function Avatar({ name, photo, online = false, showStatus = false, size = 9 }: {
 }
 
 // ─── Group Info Panel ─────────────────────────────────────────────────────────
-function GroupInfoPanel({
-  group, me, qaList, onClose, onUpdate
-}: {
-  group: any; me: any; qaList: any[];
-  onClose: () => void; onUpdate: () => void
+function GroupInfoPanel({ groupId, createdBy, me, qaList, onClose, onUpdate }: {
+  groupId: string; createdBy: string; me: any; qaList: any[]; onClose: () => void; onUpdate: () => void
 }) {
+  const [group,    setGroup]    = useState<any>(null)
   const [members,  setMembers]  = useState<UserProfile[]>([])
   const [loading,  setLoading]  = useState(true)
   const [editing,  setEditing]  = useState(false)
-  const [name,     setName]     = useState(group.name)
-  const [desc,     setDesc]     = useState(group.description || '')
+  const [name,     setName]     = useState('')
+  const [desc,     setDesc]     = useState('')
   const [saving,   setSaving]   = useState(false)
+  const [search,   setSearch]   = useState('')
 
-  useEffect(() => {
-    const ids: string[] = Array.isArray(group.member_ids) ? group.member_ids : []
-    Promise.all(ids.map(id => fetchProfile(id))).then(ps => {
-      setMembers(ps)
-      setLoading(false)
-    })
-  }, [group.member_ids])
+  // Always fetch fresh from DB
+  const reload = useCallback(async () => {
+    const { data: g } = await supabase.from('group_conversations').select('*').eq('id', groupId).single()
+    if (!g) return
+    setGroup(g)
+    setName(g.name)
+    setDesc(g.description || '')
+    const ids: string[] = Array.isArray(g.member_ids) ? g.member_ids : []
+    const profiles = await Promise.all(ids.map(id => fetchProfile(id)))
+    setMembers(profiles)
+    setLoading(false)
+  }, [groupId])
 
-  const isCreator = me?.id === group.created_by
+  useEffect(() => { reload() }, [reload])
+
+  const isCreator = me?.id === createdBy
 
   const removeMember = async (uid: string) => {
     if (!isCreator || uid === me?.id) return
-    // Fetch fresh data first
-    const { data: fresh } = await supabase
-      .from('group_conversations')
-      .select('member_ids')
-      .eq('id', group.id)
-      .single()
+    const { data: fresh } = await supabase.from('group_conversations').select('member_ids').eq('id', groupId).single()
     const current: string[] = Array.isArray(fresh?.member_ids) ? fresh.member_ids : []
-    const newIds = current.filter((id: string) => id !== uid)
-    await supabase.from('group_conversations').update({ member_ids: newIds }).eq('id', group.id)
-    setMembers(m => m.filter(p => p.user_id !== uid))
+    await supabase.from('group_conversations').update({ member_ids: current.filter(id => id !== uid) }).eq('id', groupId)
+    // Instant UI update
+    setMembers(prev => prev.filter(p => p.user_id !== uid))
     onUpdate()
   }
 
   const addMember = async (uid: string) => {
     if (!isCreator) return
-    // Always fetch fresh data from DB to avoid stale member_ids
-    const { data: fresh } = await supabase
-      .from('group_conversations')
-      .select('member_ids')
-      .eq('id', group.id)
-      .single()
+    const { data: fresh } = await supabase.from('group_conversations').select('member_ids').eq('id', groupId).single()
     const current: string[] = Array.isArray(fresh?.member_ids) ? fresh.member_ids : []
     if (current.includes(uid)) return
-    const newIds = [...current, uid]
-    await supabase.from('group_conversations').update({ member_ids: newIds }).eq('id', group.id)
+    await supabase.from('group_conversations').update({ member_ids: [...current, uid] }).eq('id', groupId)
     const prof = await fetchProfile(uid)
-    setMembers(m => [...m, prof])
+    // Instant UI update
+    setMembers(prev => [...prev, prof])
     onUpdate()
   }
 
   const saveInfo = async () => {
     setSaving(true)
-    await supabase.from('group_conversations')
-      .update({ name: name.trim(), description: desc.trim() })
-      .eq('id', group.id)
+    await supabase.from('group_conversations').update({ name: name.trim(), description: desc.trim() }).eq('id', groupId)
     setSaving(false)
     setEditing(false)
     onUpdate()
   }
 
-  const notInGroup = qaList.filter(qa => !(group.member_ids as string[]).includes(qa.user_id))
+  const memberIds = members.map(m => m.user_id)
+  const notInGroup = qaList.filter(qa => !memberIds.includes(qa.user_id))
+  const filteredNotIn = search
+    ? notInGroup.filter(qa => qa.full_name?.toLowerCase().includes(search.toLowerCase()))
+    : notInGroup
 
   return (
-    <div className="absolute top-0 right-0 w-72 h-full bg-white border-l border-[#E8E6E1] flex flex-col z-10 animate-fade-in">
+    <div className="absolute top-0 right-0 w-72 h-full bg-white border-l border-[#E8E6E1] flex flex-col z-10 shadow-xl animate-fade-in">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#E8E6E1]">
         <h3 className="font-semibold text-sm">Group info</h3>
-        <button onClick={onClose} className="p-1 rounded-md hover:bg-[#F5F4F1] text-[#111]/40 transition-colors">
-          <X size={14} />
-        </button>
+        <button onClick={onClose} className="p-1 rounded-md hover:bg-[#F5F4F1] text-[#111]/40 transition-colors"><X size={14} /></button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-5">
-        {/* Name & description */}
-        <div>
-          {editing ? (
-            <div className="space-y-2">
-              <div>
-                <label className="label">Name</label>
-                <input className="input" value={name} onChange={e => setName(e.target.value)} />
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center"><div className="w-6 h-6 border-2 border-[#111]/15 border-t-[#111] rounded-full animate-spin" /></div>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-4 space-y-5">
+          {/* Name & Description */}
+          <div>
+            {editing ? (
+              <div className="space-y-2">
+                <div><label className="label">Name</label><input className="input" value={name} onChange={e => setName(e.target.value)} /></div>
+                <div><label className="label">Description</label><textarea className="input resize-none h-16" value={desc} onChange={e => setDesc(e.target.value)} /></div>
+                <div className="flex gap-2">
+                  <button onClick={saveInfo} disabled={saving} className="btn-primary text-xs px-3 py-1.5">{saving ? 'Saving…' : 'Save'}</button>
+                  <button onClick={() => setEditing(false)} className="btn-secondary text-xs px-3 py-1.5">Cancel</button>
+                </div>
               </div>
-              <div>
-                <label className="label">Description</label>
-                <textarea className="input resize-none h-20" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Optional description…" />
-              </div>
-              <div className="flex gap-2">
-                <button onClick={saveInfo} disabled={saving} className="btn-primary text-xs px-3 py-1.5">{saving ? 'Saving…' : 'Save'}</button>
-                <button onClick={() => setEditing(false)} className="btn-secondary text-xs px-3 py-1.5">Cancel</button>
-              </div>
-            </div>
-          ) : (
-            <div>
+            ) : (
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="font-semibold">{group.name}</p>
-                  {group.description && <p className="text-sm text-[#111]/50 mt-1">{group.description}</p>}
+                  <p className="font-semibold">{group?.name}</p>
+                  {group?.description && <p className="text-sm text-[#111]/50 mt-1">{group.description}</p>}
                 </div>
                 {isCreator && (
-                  <button onClick={() => setEditing(true)} className="text-xs text-[#111]/40 hover:text-[#111] transition-colors px-2 py-1 rounded-md hover:bg-[#F5F4F1]">Edit</button>
+                  <button onClick={() => setEditing(true)} className="text-xs text-[#111]/40 hover:text-[#111] px-2 py-1 rounded hover:bg-[#F5F4F1] transition-colors">Edit</button>
                 )}
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Members */}
-        <div>
-          <p className="label mb-3">Members ({members.length})</p>
-          {loading ? (
-            <div className="space-y-2">
-              {[1,2].map(i => <div key={i} className="h-10 bg-[#F5F4F1] rounded-lg animate-pulse"/>)}
-            </div>
-          ) : (
+          {/* Members */}
+          <div>
+            <p className="label mb-2">Members ({members.length})</p>
             <div className="space-y-1">
               {members.map(m => (
                 <div key={m.user_id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-[#F5F4F1] group">
@@ -174,41 +156,46 @@ function GroupInfoPanel({
                     <Link href={profileLink(m)} className="text-sm font-medium hover:text-[#C8473A] transition-colors truncate block">
                       {m.display_name}
                     </Link>
-                    {m.user_id === group.created_by && (
-                      <p className="text-[10px] text-[#111]/35">Creator</p>
-                    )}
+                    {m.user_id === createdBy && <p className="text-[10px] text-[#111]/35">Creator</p>}
                   </div>
                   {isCreator && m.user_id !== me?.id && (
                     <button onClick={() => removeMember(m.user_id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-red-50 text-red-500 transition-all">
-                      <UserMinus size={13} />
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 text-red-500 transition-all">
+                      <UserMinus size={12} />
                     </button>
                   )}
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Add members */}
+          {isCreator && notInGroup.length > 0 && (
+            <div>
+              <p className="label mb-2">Add members</p>
+              {/* Search */}
+              <div className="relative mb-2">
+                <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#111]/30" />
+                <input className="w-full bg-[#F5F4F1] rounded-lg pl-7 pr-3 py-1.5 text-xs placeholder:text-[#111]/30 focus:outline-none border border-transparent focus:border-[#111]/15"
+                  placeholder="Search by name…" value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
+              <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                {filteredNotIn.map(qa => (
+                  <button key={qa.user_id} onClick={() => addMember(qa.user_id)}
+                    className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-[#F5F4F1] transition-colors text-left">
+                    <div className="w-7 h-7 rounded-md bg-[#E8E6E1] overflow-hidden flex-shrink-0 flex items-center justify-center">
+                      {qa.photo_url ? <img src={qa.photo_url} className="w-full h-full object-cover" alt="" /> : <span className="text-[10px] font-bold text-[#111]/30">{qa.full_name?.[0]}</span>}
+                    </div>
+                    <span className="text-sm font-medium flex-1">{qa.full_name}</span>
+                    <UserPlus size={12} className="text-[#111]/30" />
+                  </button>
+                ))}
+                {filteredNotIn.length === 0 && <p className="text-xs text-[#111]/35 p-2">No matches</p>}
+              </div>
+            </div>
           )}
         </div>
-
-        {/* Add members (creator only) */}
-        {isCreator && notInGroup.length > 0 && (
-          <div>
-            <p className="label mb-3">Add members</p>
-            <div className="space-y-1 max-h-40 overflow-y-auto">
-              {notInGroup.map(qa => (
-                <button key={qa.user_id} onClick={() => addMember(qa.user_id)}
-                  className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-[#F5F4F1] transition-colors text-left">
-                  <div className="w-8 h-8 rounded-md bg-[#E8E6E1] overflow-hidden flex-shrink-0 flex items-center justify-center">
-                    {qa.photo_url ? <img src={qa.photo_url} className="w-full h-full object-cover" alt="" /> : <span className="text-xs font-bold text-[#111]/30">{qa.full_name?.[0]}</span>}
-                  </div>
-                  <span className="text-sm font-medium">{qa.full_name}</span>
-                  <UserPlus size={13} className="ml-auto text-[#111]/30" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   )
 }
@@ -219,42 +206,48 @@ function MessagesInner() {
   const params     = useSearchParams()
   const openUserId = params.get('userId')
 
-  const [me,           setMe]           = useState<any>(null)
-  const [myRole,       setMyRole]       = useState('')
-  const [convs,        setConvs]        = useState<any[]>([])
-  const [groups,       setGroups]       = useState<any[]>([])
-  const [active,       setActive]       = useState<{ type: 'direct' | 'group'; id: string; meta: any } | null>(null)
-  const [msgs,         setMsgs]         = useState<any[]>([])
-  const [pending,      setPending]      = useState<any[]>([])
-  const [tab,          setTab]          = useState<'chats' | 'requests' | 'new-group'>('chats')
-  const [mobileChat,   setMobileChat]   = useState(false)
-  const [showInfo,     setShowInfo]     = useState(false)
-  const [loading,      setLoading]      = useState(true)
-  const [sending,      setSending]      = useState(false)
-  const [text,         setText]         = useState('')
-  const [search,       setSearch]       = useState('')
-  const [online,       setOnline]       = useState<Set<string>>(new Set())
-  const [qaList,       setQAList]       = useState<any[]>([])
-  const [groupCount,   setGroupCount]   = useState(0)
-  const [newGroup,     setNewGroup]     = useState({ name: '', description: '', members: [] as string[] })
-  const [lightbox,     setLightbox]     = useState<string | null>(null)
-  const [hoveredMsg,   setHoveredMsg]   = useState<string | null>(null)
+  const [me,         setMe]         = useState<any>(null)
+  const [convs,      setConvs]      = useState<any[]>([])
+  const [groups,     setGroups]     = useState<any[]>([])
+  const [active,     setActive]     = useState<{ type: 'direct' | 'group'; id: string; meta: any } | null>(null)
+  const [msgs,       setMsgs]       = useState<any[]>([])
+  const [pending,    setPending]    = useState<any[]>([])
+  const [tab,        setTab]        = useState<'chats' | 'requests' | 'new-group'>('chats')
+  const [mobileChat, setMobileChat] = useState(false)
+  const [showInfo,   setShowInfo]   = useState(false)
+  const [loading,    setLoading]    = useState(true)
+  const [sending,    setSending]    = useState(false)
+  const [text,       setText]       = useState('')
+  const [search,     setSearch]     = useState('')
+  const [online,     setOnline]     = useState<Set<string>>(new Set())
+  const [qaList,     setQAList]     = useState<any[]>([])
+  const [groupCount, setGroupCount] = useState(0)
+  const [newGroup,   setNewGroup]   = useState({ name: '', description: '', members: [] as string[] })
+  const [lightbox,   setLightbox]   = useState<string | null>(null)
+  const [hoveredMsg, setHoveredMsg] = useState<string | null>(null)
 
   const endRef    = useRef<HTMLDivElement>(null)
   const fileRef   = useRef<HTMLInputElement>(null)
   const imgRef    = useRef<HTMLInputElement>(null)
-  const activeRef = useRef(active)
-  const meRef     = useRef(me)
+  const meRef     = useRef<any>(null)
+  const activeRef = useRef<typeof active>(null)
 
-  useEffect(() => { activeRef.current = active }, [active])
-  useEffect(() => { meRef.current = me }, [me])
-
-  // ── Scroll to bottom ──────────────────────────────────────────────────────
   const scrollEnd = useCallback(() => {
     setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 80)
   }, [])
 
-  // ── Load conversations list ───────────────────────────────────────────────
+  // ── Mark read - updates DB AND local state immediately ────────────────────
+  const markRead = useCallback(async (convId: string, uid: string) => {
+    await supabase.from('messages')
+      .update({ read: true })
+      .eq('conversation_id', convId)
+      .neq('sender_id', uid)
+      .eq('read', false)
+    // Update sidebar unread count instantly
+    setConvs(prev => prev.map(c => c.id === convId ? { ...c, unread: 0 } : c))
+  }, [])
+
+  // ── Load convs ────────────────────────────────────────────────────────────
   const loadConvs = useCallback(async (uid: string) => {
     const { data } = await supabase
       .from('conversations')
@@ -268,7 +261,7 @@ function MessagesInner() {
       const other = await fetchProfile(otherId)
       const { data: last } = await supabase
         .from('messages')
-        .select('content, file_type, created_at, sender_id, read, deleted')
+        .select('content,file_type,created_at,sender_id,read,deleted')
         .eq('conversation_id', c.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -296,7 +289,7 @@ function MessagesInner() {
       const memberIds: string[] = Array.isArray(g.member_ids) ? g.member_ids : []
       const { data: last } = await supabase
         .from('group_messages')
-        .select('content, created_at, deleted')
+        .select('content,created_at,deleted')
         .eq('group_id', g.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -322,9 +315,7 @@ function MessagesInner() {
         .eq('group_id', actv.id)
         .order('created_at')
       if (!data) return
-      const withSenders = await Promise.all(
-        data.map(async m => ({ ...m, sender: await fetchProfile(m.sender_id) }))
-      )
+      const withSenders = await Promise.all(data.map(async m => ({ ...m, sender: await fetchProfile(m.sender_id) })))
       setMsgs(withSenders)
     }
     scrollEnd()
@@ -342,17 +333,6 @@ function MessagesInner() {
     setPending(enriched)
   }, [])
 
-  const markRead = useCallback(async (convId: string, uid: string) => {
-    await supabase
-      .from('messages')
-      .update({ read: true })
-      .eq('conversation_id', convId)
-      .neq('sender_id', uid)
-      .eq('read', false)
-    // Update local unread count optimistically
-    setConvs(prev => prev.map(c => c.id === convId ? { ...c, unread: 0 } : c))
-  }, [])
-
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -361,16 +341,12 @@ function MessagesInner() {
       setMe(u)
       meRef.current = u
 
-      const { data: prof } = await supabase.from('profiles').select('role').eq('user_id', u.id).single()
-      setMyRole(prof?.role || '')
-
       await Promise.all([loadConvs(u.id), loadGroups(u.id), loadPending(u.id)])
 
       const { data: qas } = await supabase
         .from('qa_profiles')
-        .select('user_id, full_name, photo_url')
+        .select('user_id,full_name,photo_url')
         .eq('verification_status', 'verified')
-        .eq('is_public', true)
         .neq('user_id', u.id)
       setQAList(qas || [])
 
@@ -382,72 +358,89 @@ function MessagesInner() {
 
       setLoading(false)
 
-      // Presence
-      const presence = supabase.channel('presence:hhub')
+      // ── Presence channel ──
+      const presence = supabase.channel('presence:hhub-global')
         .on('presence', { event: 'sync' }, () => {
           const ids = new Set(
             Object.values(presence.presenceState()).flat().map((x: any) => x.user_id as string)
           )
           setOnline(ids)
         })
-        .subscribe(async s => { if (s === 'SUBSCRIBED') await presence.track({ user_id: u.id }) })
+        .on('presence', { event: 'join' }, ({ newPresences }) => {
+          setOnline(prev => {
+            const next = new Set(prev)
+            newPresences.forEach((p: any) => next.add(p.user_id))
+            return next
+          })
+        })
+        .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+          setOnline(prev => {
+            const next = new Set(prev)
+            leftPresences.forEach((p: any) => next.delete(p.user_id))
+            return next
+          })
+        })
+        .subscribe(async status => {
+          if (status === 'SUBSCRIBED') await presence.track({ user_id: u.id })
+        })
 
       // Auto-open from profile
       if (openUserId) {
-        const { data: conn } = await supabase
-          .from('connection_requests')
-          .select('status')
-          .or(`and(sender_id.eq.${u.id},receiver_id.eq.${openUserId}),and(sender_id.eq.${openUserId},receiver_id.eq.${u.id})`)
-          .eq('status', 'accepted')
+        const { data: conv } = await supabase
+          .from('conversations')
+          .select('*')
+          .or(`and(participant_1.eq.${u.id},participant_2.eq.${openUserId}),and(participant_1.eq.${openUserId},participant_2.eq.${u.id})`)
           .single()
-
-        if (conn) {
-          const { data: conv } = await supabase
-            .from('conversations')
-            .select('*')
-            .or(`and(participant_1.eq.${u.id},participant_2.eq.${openUserId}),and(participant_1.eq.${openUserId},participant_2.eq.${u.id})`)
-            .single()
-          if (conv) {
-            const other = await fetchProfile(openUserId)
-            const actv = { type: 'direct' as const, id: conv.id, meta: { other } }
-            setActive(actv)
-            activeRef.current = actv
-            setMobileChat(true)
-            await loadMsgs(actv)
-            await markRead(conv.id, u.id)
-          }
+        if (conv) {
+          const other = await fetchProfile(openUserId)
+          const actv = { type: 'direct' as const, id: conv.id, meta: { other } }
+          setActive(actv)
+          activeRef.current = actv
+          setMobileChat(true)
+          await loadMsgs(actv)
+          await markRead(conv.id, u.id)
         }
       }
     })
   }, [])
 
-  // ── Realtime subscriptions ────────────────────────────────────────────────
+  // ── Realtime subscription ─────────────────────────────────────────────────
   useEffect(() => {
     if (!active || !me) return
 
     const isDirect = active.type === 'direct'
-    const table  = isDirect ? 'messages' : 'group_messages'
-    const filter = isDirect ? `conversation_id=eq.${active.id}` : `group_id=eq.${active.id}`
+    const table    = isDirect ? 'messages' : 'group_messages'
+    const filter   = isDirect ? `conversation_id=eq.${active.id}` : `group_id=eq.${active.id}`
 
-    const channel = supabase
-      .channel(`msgs:${active.id}:${Date.now()}`)
+    const channel = supabase.channel(`chat:${active.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table, filter },
         async payload => {
           const msg = payload.new as any
-          if (!isDirect) {
-            const sender = await fetchProfile(msg.sender_id)
-            setMsgs(prev => [...prev, { ...msg, sender }])
-          } else {
-            setMsgs(prev => [...prev, msg])
-            // Mark as read immediately if we're viewing
+          if (isDirect) {
+            setMsgs(prev => {
+              // Avoid duplicates
+              if (prev.some(m => m.id === msg.id)) return prev
+              return [...prev, msg]
+            })
+            // Mark read immediately since we're viewing this conversation
             if (msg.sender_id !== meRef.current?.id) {
-              await markRead(activeRef.current!.id, meRef.current!.id)
+              await supabase.from('messages').update({ read: true }).eq('id', msg.id)
+              setConvs(prev => prev.map(c => c.id === active.id
+                ? { ...c, last: msg, unread: 0 }
+                : c
+              ))
+            } else {
+              setConvs(prev => prev.map(c => c.id === active.id ? { ...c, last: msg } : c))
             }
+          } else {
+            const sender = await fetchProfile(msg.sender_id)
+            setMsgs(prev => {
+              if (prev.some(m => m.id === msg.id)) return prev
+              return [...prev, { ...msg, sender }]
+            })
+            setGroups(prev => prev.map(g => g.id === active.id ? { ...g, last: msg } : g))
           }
           scrollEnd()
-          // Update conv list
-          if (isDirect) await loadConvs(meRef.current!.id)
-          else await loadGroups(meRef.current!.id)
         }
       )
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table, filter },
@@ -458,13 +451,42 @@ function MessagesInner() {
       )
       .subscribe()
 
-    // Mark read on open
+    // Mark existing unread on open
     if (isDirect) markRead(active.id, me.id)
 
     return () => { supabase.removeChannel(channel) }
   }, [active?.id, me?.id])
 
-  // ── Actions ───────────────────────────────────────────────────────────────
+  useEffect(() => { scrollEnd() }, [msgs.length])
+
+  // ── Also subscribe to ALL conversations for sidebar unread updates ─────────
+  useEffect(() => {
+    if (!me) return
+    // Listen for new messages in any of user's conversations to update sidebar
+    const sidebarCh = supabase.channel('sidebar-updates')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' },
+        async payload => {
+          const msg = payload.new as any
+          // Check if this message is in one of our conversations
+          const conv = convs.find(c => c.id === msg.conversation_id)
+          if (!conv) return
+          if (msg.sender_id === me.id) return // Our own message, skip
+
+          // If we're NOT viewing this conversation, increment unread
+          if (activeRef.current?.id !== msg.conversation_id) {
+            setConvs(prev => prev.map(c => c.id === msg.conversation_id
+              ? { ...c, last: msg, unread: (c.unread || 0) + 1 }
+              : c
+            ))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(sidebarCh) }
+  }, [me?.id, convs.length])
+
+  // ── Open chat ─────────────────────────────────────────────────────────────
   const openDirect = useCallback(async (convId: string, other: UserProfile) => {
     const actv = { type: 'direct' as const, id: convId, meta: { other } }
     setActive(actv)
@@ -472,8 +494,8 @@ function MessagesInner() {
     setMobileChat(true)
     setShowInfo(false)
     await loadMsgs(actv)
-    if (me) await markRead(convId, me.id)
-  }, [me, loadMsgs, markRead])
+    if (meRef.current) await markRead(convId, meRef.current.id)
+  }, [loadMsgs, markRead])
 
   const openGroup = useCallback(async (group: any) => {
     const actv = { type: 'group' as const, id: group.id, meta: group }
@@ -484,6 +506,7 @@ function MessagesInner() {
     await loadMsgs(actv)
   }, [loadMsgs])
 
+  // ── Requests ──────────────────────────────────────────────────────────────
   const handleRequest = async (id: string, action: 'accepted' | 'declined', req: any) => {
     await supabase.from('connection_requests').update({ status: action }).eq('id', id)
     if (action === 'accepted') {
@@ -497,12 +520,13 @@ function MessagesInner() {
       })
       if (conv) {
         await loadConvs(me.id)
-        await openDirect(conv.id, req.sender)
+        openDirect(conv.id, req.sender)
       }
     }
     setPending(p => p.filter(r => r.id !== id))
   }
 
+  // ── Create group ──────────────────────────────────────────────────────────
   const createGroup = async () => {
     if (groupCount >= 2) { alert('Maximum 2 group chats per account.'); return }
     if (!newGroup.name.trim() || newGroup.members.length === 0) return
@@ -514,12 +538,13 @@ function MessagesInner() {
     if (g) {
       setGroupCount(c => c + 1)
       await loadGroups(me.id)
-      await openGroup({ ...g, memberIds, memberCount: memberIds.length })
+      openGroup({ ...g, memberIds, memberCount: memberIds.length })
     }
     setNewGroup({ name: '', description: '', members: [] })
     setTab('chats')
   }
 
+  // ── Send ──────────────────────────────────────────────────────────────────
   const sendMsg = async () => {
     if (!text.trim() || !active || sending) return
     setSending(true)
@@ -530,16 +555,12 @@ function MessagesInner() {
       await supabase.from('messages').insert({
         conversation_id: active.id, sender_id: me.id, content, read: false, deleted: false,
       })
-      await supabase.from('conversations')
-        .update({ last_message_at: new Date().toISOString() })
-        .eq('id', active.id)
+      await supabase.from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', active.id)
     } else {
       await supabase.from('group_messages').insert({
         group_id: active.id, sender_id: me.id, content, deleted: false,
       })
-      await supabase.from('group_conversations')
-        .update({ last_message_at: new Date().toISOString() })
-        .eq('id', active.id)
+      await supabase.from('group_conversations').update({ last_message_at: new Date().toISOString() }).eq('id', active.id)
     }
     setSending(false)
   }
@@ -549,15 +570,7 @@ function MessagesInner() {
     const result = await uploadChatFile(file, me.id)
     if ('error' in result) { alert(result.error); return }
 
-    const payload = {
-      sender_id: me.id,
-      file_url: result.url,
-      file_type: result.type,
-      file_name: result.name,
-      file_size: result.size,
-      deleted: false,
-    }
-
+    const payload = { sender_id: me.id, file_url: result.url, file_type: result.type, file_name: result.name, file_size: result.size, deleted: false }
     if (active.type === 'direct') {
       await supabase.from('messages').insert({ ...payload, conversation_id: active.id, read: false })
       await supabase.from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', active.id)
@@ -565,7 +578,6 @@ function MessagesInner() {
     } else {
       await supabase.from('group_messages').insert({ ...payload, group_id: active.id })
       await supabase.from('group_conversations').update({ last_message_at: new Date().toISOString() }).eq('id', active.id)
-      await loadGroups(me.id)
     }
   }
 
@@ -575,13 +587,8 @@ function MessagesInner() {
     setMsgs(prev => prev.map(m => m.id === msg.id ? { ...m, deleted: true, content: null, file_url: null, file_type: null } : m))
   }
 
-  // ── Filter ────────────────────────────────────────────────────────────────
-  const filteredConvs = convs.filter(c =>
-    !search || c.other?.display_name?.toLowerCase().includes(search.toLowerCase())
-  )
-  const filteredGroups = groups.filter(g =>
-    !search || g.name?.toLowerCase().includes(search.toLowerCase())
-  )
+  const filteredConvs  = convs.filter(c  => !search || c.other?.display_name?.toLowerCase().includes(search.toLowerCase()))
+  const filteredGroups = groups.filter(g => !search || g.name?.toLowerCase().includes(search.toLowerCase()))
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#F5F4F1]">
@@ -597,8 +604,7 @@ function MessagesInner() {
       {lightbox && (
         <div className="fixed inset-0 z-[100] bg-black/92 flex items-center justify-center p-6" onClick={() => setLightbox(null)}>
           <button className="absolute top-5 right-6 text-white/60 hover:text-white text-2xl leading-none transition-colors">✕</button>
-          <img src={lightbox} className="max-w-full max-h-[88vh] rounded-xl object-contain shadow-2xl"
-            alt="" onClick={e => e.stopPropagation()} />
+          <img src={lightbox} className="max-w-full max-h-[88vh] rounded-xl object-contain shadow-2xl" alt="" onClick={e => e.stopPropagation()} />
         </div>
       )}
 
@@ -607,23 +613,15 @@ function MessagesInner() {
 
           {/* ── Sidebar ── */}
           <div className={`w-72 flex-shrink-0 flex flex-col bg-white rounded-xl border border-[#E8E6E1] overflow-hidden ${mobileChat ? 'hidden md:flex' : 'flex'} md:flex`}>
-            {/* Tabs */}
             <div className="flex border-b border-[#E8E6E1]">
-              {[
-                ['chats', 'Chats'],
-                ['requests', pending.length > 0 ? `Requests (${pending.length})` : 'Requests'],
-                ['new-group', '+ Group'],
-              ].map(([v, l]) => (
+              {[['chats', 'Chats'], ['requests', pending.length > 0 ? `Requests (${pending.length})` : 'Requests'], ['new-group', '+ Group']].map(([v, l]) => (
                 <button key={v} onClick={() => setTab(v as any)}
-                  className={`flex-1 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
-                    tab === v ? 'text-[#111] border-[#111]' : 'text-[#111]/35 border-transparent hover:text-[#111]/60'
-                  }`}>
+                  className={`flex-1 py-2.5 text-xs font-semibold border-b-2 transition-colors ${tab === v ? 'text-[#111] border-[#111]' : 'text-[#111]/35 border-transparent hover:text-[#111]/60'}`}>
                   {l}
                 </button>
               ))}
             </div>
 
-            {/* Search */}
             {tab === 'chats' && (
               <div className="p-2.5 border-b border-[#E8E6E1]">
                 <div className="relative">
@@ -634,15 +632,15 @@ function MessagesInner() {
               </div>
             )}
 
-            {/* Chats list */}
+            {/* Chat list */}
             {tab === 'chats' && (
               <div className="flex-1 overflow-y-auto">
                 {filteredConvs.length === 0 && filteredGroups.length === 0 && (
                   <div className="p-6 text-center text-[#111]/30 text-xs">No conversations yet</div>
                 )}
                 {filteredConvs.map(c => {
-                  const isActive = active?.type === 'direct' && active.id === c.id
-                  const lastText = c.last?.deleted ? 'Message deleted' : (c.last?.file_type === 'image' ? '📷 Image' : c.last?.file_type === 'file' ? '📎 File' : c.last?.content || '')
+                  const isActive   = active?.type === 'direct' && active.id === c.id
+                  const lastText   = c.last?.deleted ? 'Message deleted' : c.last?.file_type === 'image' ? '📷 Image' : c.last?.file_type === 'file' ? '📎 File' : c.last?.content || ''
                   return (
                     <button key={c.id} onClick={() => openDirect(c.id, c.other)}
                       className={`w-full flex items-center gap-2.5 px-3 py-2.5 border-b border-[#F0EDE8] text-left transition-colors ${isActive ? 'bg-[#F0EDE8]' : 'hover:bg-[#F8F7F5]'}`}>
@@ -694,10 +692,7 @@ function MessagesInner() {
                     <div key={r.id} className="p-3 border-b border-[#F0EDE8]">
                       <div className="flex items-center gap-2 mb-2">
                         <Avatar name={r.sender.display_name} photo={r.sender.photo_url} />
-                        <div>
-                          <p className="text-sm font-semibold">{r.sender.display_name}</p>
-                          <p className="text-xs text-[#111]/40">{r.sender.sub}</p>
-                        </div>
+                        <div><p className="text-sm font-semibold">{r.sender.display_name}</p><p className="text-xs text-[#111]/40">{r.sender.sub}</p></div>
                       </div>
                       <p className="text-xs text-[#111]/60 bg-[#F5F4F1] rounded-lg p-2.5 mb-2.5 leading-relaxed">"{r.message}"</p>
                       <div className="flex gap-2">
@@ -716,14 +711,8 @@ function MessagesInner() {
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
                   Max 2 group chats · You have {groupCount}/2
                 </div>
-                <div>
-                  <label className="label">Group name *</label>
-                  <input className="input" value={newGroup.name} onChange={e => setNewGroup({ ...newGroup, name: e.target.value })} placeholder="e.g. QA Ukraine" />
-                </div>
-                <div>
-                  <label className="label">Description</label>
-                  <input className="input" value={newGroup.description} onChange={e => setNewGroup({ ...newGroup, description: e.target.value })} placeholder="Optional" />
-                </div>
+                <div><label className="label">Group name *</label><input className="input" value={newGroup.name} onChange={e => setNewGroup({ ...newGroup, name: e.target.value })} placeholder="e.g. QA Ukraine" /></div>
+                <div><label className="label">Description</label><input className="input" value={newGroup.description} onChange={e => setNewGroup({ ...newGroup, description: e.target.value })} placeholder="Optional" /></div>
                 <div>
                   <label className="label">Members *</label>
                   <div className="border border-[#E8E6E1] rounded-lg overflow-hidden max-h-44 overflow-y-auto">
@@ -732,10 +721,8 @@ function MessagesInner() {
                       : qaList.map(qa => (
                         <label key={qa.user_id} className="flex items-center gap-2 p-2.5 hover:bg-[#F5F4F1] cursor-pointer border-b border-[#F0EDE8] last:border-0">
                           <input type="checkbox" checked={newGroup.members.includes(qa.user_id)}
-                            onChange={e => setNewGroup(p => ({
-                              ...p,
-                              members: e.target.checked ? [...p.members, qa.user_id] : p.members.filter(id => id !== qa.user_id)
-                            }))} className="rounded" />
+                            onChange={e => setNewGroup(p => ({ ...p, members: e.target.checked ? [...p.members, qa.user_id] : p.members.filter(id => id !== qa.user_id) }))}
+                            className="rounded" />
                           <div className="w-7 h-7 rounded-md bg-[#E8E6E1] overflow-hidden flex-shrink-0 flex items-center justify-center">
                             {qa.photo_url ? <img src={qa.photo_url} className="w-full h-full object-cover" alt="" /> : <span className="text-[10px] font-bold text-[#111]/30">{qa.full_name?.[0]}</span>}
                           </div>
@@ -745,11 +732,8 @@ function MessagesInner() {
                     }
                   </div>
                 </div>
-                <button onClick={createGroup}
-                  disabled={!newGroup.name.trim() || newGroup.members.length === 0 || groupCount >= 2}
-                  className="btn-primary w-full justify-center disabled:opacity-40">
-                  Create group
-                </button>
+                <button onClick={createGroup} disabled={!newGroup.name.trim() || newGroup.members.length === 0 || groupCount >= 2}
+                  className="btn-primary w-full justify-center disabled:opacity-40">Create group</button>
               </div>
             )}
           </div>
@@ -759,9 +743,7 @@ function MessagesInner() {
             {!active ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="w-12 h-12 bg-[#F5F4F1] rounded-xl flex items-center justify-center mx-auto mb-3">
-                    <Send size={18} className="text-[#111]/20" />
-                  </div>
+                  <div className="w-12 h-12 bg-[#F5F4F1] rounded-xl flex items-center justify-center mx-auto mb-3"><Send size={18} className="text-[#111]/20" /></div>
                   <p className="text-sm text-[#111]/35 font-medium">Select a conversation</p>
                 </div>
               </div>
@@ -790,8 +772,7 @@ function MessagesInner() {
                   </div>
                   {active.type === 'group' && (
                     <button onClick={() => setShowInfo(!showInfo)}
-                      className={`p-2 rounded-lg transition-colors ${showInfo ? 'bg-[#F5F4F1] text-[#111]' : 'text-[#111]/40 hover:text-[#111] hover:bg-[#F5F4F1]'}`}
-                      title="Group info">
+                      className={`p-2 rounded-lg transition-colors ${showInfo ? 'bg-[#F5F4F1] text-[#111]' : 'text-[#111]/40 hover:text-[#111] hover:bg-[#F5F4F1]'}`}>
                       <Info size={16} />
                     </button>
                   )}
@@ -800,10 +781,10 @@ function MessagesInner() {
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto px-4 py-4">
                   {msgs.map((m, i) => {
-                    const isMe    = m.sender_id === me?.id
-                    const prev    = msgs[i - 1]
-                    const showDate = i === 0 || fmtDate(prev?.created_at) !== fmtDate(m.created_at)
-                    const grouped = !showDate && prev?.sender_id === m.sender_id
+                    const isMe      = m.sender_id === me?.id
+                    const prev      = msgs[i - 1]
+                    const showDate  = i === 0 || fmtDate(prev?.created_at) !== fmtDate(m.created_at)
+                    const grouped   = !showDate && prev?.sender_id === m.sender_id
                     const senderName = active.type === 'group' ? (m.sender?.display_name || 'Unknown') : ''
                     const canDelete  = isMe && !m.deleted
 
@@ -831,13 +812,10 @@ function MessagesInner() {
                             {!isMe && active.type === 'group' && !grouped && (
                               <p className="text-[10px] text-[#111]/40 font-medium mb-0.5 px-1">{senderName}</p>
                             )}
-
                             <div className={`rounded-2xl px-3.5 py-2.5 max-w-full ${
-                              m.deleted
-                                ? 'bg-[#F0EDE8] text-[#111]/30 italic'
-                                : isMe
-                                  ? 'bg-[#111] text-white rounded-br-sm'
-                                  : 'bg-[#F5F4F1] text-[#111] rounded-bl-sm'
+                              m.deleted ? 'bg-[#F0EDE8] text-[#111]/30 italic'
+                              : isMe ? 'bg-[#111] text-white rounded-br-sm'
+                              : 'bg-[#F5F4F1] text-[#111] rounded-bl-sm'
                             }`}>
                               {m.deleted ? (
                                 <p className="text-xs">Message deleted by user</p>
@@ -868,9 +846,7 @@ function MessagesInner() {
                                 m.read ? <CheckCheck size={11} className="text-blue-500" /> : <Check size={11} className="text-[#111]/25" />
                               )}
                               {canDelete && hoveredMsg === m.id && (
-                                <button onClick={() => deleteMsg(m)}
-                                  className="p-0.5 rounded text-red-400 hover:text-red-600 transition-colors ml-1"
-                                  title="Delete message">
+                                <button onClick={() => deleteMsg(m)} className="p-0.5 rounded text-red-400 hover:text-red-600 transition-colors" title="Delete message">
                                   <Trash2 size={10} />
                                 </button>
                               )}
@@ -899,7 +875,7 @@ function MessagesInner() {
                       rows={1} value={text}
                       onChange={e => setText(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg() } }}
-                      placeholder="Message… (Enter to send, Shift+Enter for new line)"
+                      placeholder="Message… (Enter to send)"
                       maxLength={500}
                     />
                     <button onClick={sendMsg} disabled={!text.trim() || sending}
@@ -908,7 +884,7 @@ function MessagesInner() {
                     </button>
                   </div>
                   <div className="flex justify-between mt-1.5">
-                    <p className="text-[10px] text-[#111]/25">Images ≤5MB · Files ≤2MB · Shift+Enter for newline</p>
+                    <p className="text-[10px] text-[#111]/25">Images ≤5MB · Files ≤2MB · Shift+Enter for new line</p>
                     {text.length > 400 && <p className={`text-[10px] ${text.length >= 500 ? 'text-red-500' : 'text-[#111]/35'}`}>{text.length}/500</p>}
                   </div>
                 </div>
@@ -916,15 +892,19 @@ function MessagesInner() {
                 {/* Group info panel */}
                 {active.type === 'group' && showInfo && (
                   <GroupInfoPanel
-                    group={{ ...activeMeta, member_ids: activeMeta.memberIds || activeMeta.member_ids }}
+                    groupId={active.id}
+                    createdBy={activeMeta.created_by}
                     me={me}
                     qaList={qaList}
                     onClose={() => setShowInfo(false)}
                     onUpdate={async () => {
                       await loadGroups(me.id)
                       // Refresh active meta
-                      const updated = groups.find(g => g.id === active.id)
-                      if (updated) setActive(prev => prev ? { ...prev, meta: updated } : prev)
+                      const { data: g } = await supabase.from('group_conversations').select('*').eq('id', active.id).single()
+                      if (g) {
+                        const memberIds: string[] = Array.isArray(g.member_ids) ? g.member_ids : []
+                        setActive(prev => prev ? { ...prev, meta: { ...g, memberIds, memberCount: memberIds.length } } : prev)
+                      }
                     }}
                   />
                 )}

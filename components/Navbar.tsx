@@ -48,7 +48,7 @@ export default function Navbar() {
     }
   }, [])
 
-  const logout = async () => { await supabase.auth.signOut(); router.push('/'); setUserMenu(false) }
+  const logout = async () => { await supabase.auth.signOut(); setUserMenu(false); window.location.href = '/' }
 
   const isHome = pathname === '/'
   const solid  = scrolled || !isHome

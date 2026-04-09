@@ -21,16 +21,20 @@ export default function SpecialistProfile() {
   const [connStatus, setConnStatus] = useState<'none'|'pending'|'accepted'>('none')
   const [modal,     setModal]     = useState(false)
   const [cert,      setCert]      = useState<any>(null)
+  const [lightboxImg, setLightboxImg] = useState<string|null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       setMe(data.user)
       // Check connection status
       if (data.user) {
-        const { data: conn } = await supabase.from('connection_requests').select('status')
+        const { data: conns } = await supabase
+          .from('connection_requests')
+          .select('status, sender_id, receiver_id')
           .or(`and(sender_id.eq.${data.user.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${data.user.id})`)
-          .single()
-        if (conn) setConnStatus(conn.status as any)
+          .order('created_at', { ascending: false })
+          .limit(1)
+        if (conns && conns.length > 0) setConnStatus(conns[0].status as any)
       }
     })
 
@@ -83,12 +87,20 @@ export default function SpecialistProfile() {
         {/* Hero */}
         <div className="bg-[#0A0A0A] py-12">
           <div className="max-w-5xl mx-auto px-6 flex flex-col md:flex-row items-start gap-8">
-            <div className="w-28 h-28 md:w-36 md:h-36 rounded-3xl bg-[#1A1A1A] overflow-hidden border border-white/8 flex-shrink-0 flex items-center justify-center">
+            <button
+              className="w-28 h-28 md:w-36 md:h-36 rounded-3xl bg-[#1A1A1A] overflow-hidden border border-white/8 flex-shrink-0 flex items-center justify-center group relative"
+              onClick={() => profile.photo_url && setLightboxImg(profile.photo_url)}
+              style={{ cursor: profile.photo_url ? 'zoom-in' : 'default' }}>
               {profile.photo_url
-                ? <img src={profile.photo_url} className="w-full h-full object-cover" alt={profile.full_name}/>
+                ? <>
+                    <img src={profile.photo_url} className="w-full h-full object-cover" alt={profile.full_name}/>
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-3xl flex items-center justify-center">
+                      <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">View</span>
+                    </div>
+                  </>
                 : <span style={{ fontFamily:'var(--font-display)' }} className="text-5xl font-bold text-white/20">{profile.full_name?.[0]||'?'}</span>
               }
-            </div>
+            </button>
             <div className="flex-1">
               <div className="flex items-center gap-3 flex-wrap mb-1">
                 <h1 style={{ fontFamily:'var(--font-display)' }} className="text-3xl md:text-4xl font-extrabold text-white">{profile.full_name}</h1>
@@ -209,6 +221,14 @@ export default function SpecialistProfile() {
       <Footer/>
 
       {modal && <ConnectionModal target={profile} targetType="qa" onClose={() => setModal(false)}/>}
+
+      {/* Photo/cert lightbox */}
+      {lightboxImg && (
+        <div className="fixed inset-0 z-[100] bg-black/92 flex items-center justify-center p-6" onClick={() => setLightboxImg(null)}>
+          <button className="absolute top-5 right-6 text-white/60 hover:text-white text-2xl leading-none transition-colors">✕</button>
+          <img src={lightboxImg} className="max-w-full max-h-[88vh] rounded-xl object-contain shadow-2xl" alt="" onClick={e => e.stopPropagation()} />
+        </div>
+      )}
 
       {cert && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
