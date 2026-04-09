@@ -73,6 +73,7 @@ function GroupInfoPanel({ groupId, createdBy, me, qaList, onClose, onUpdate }: {
   useEffect(() => { reload() }, [reload])
 
   const isCreator = me?.id === createdBy
+  // Needed for delete action in header
 
   const removeMember = async (uid: string) => {
     if (!isCreator || uid === me?.id) return
@@ -114,7 +115,20 @@ function GroupInfoPanel({ groupId, createdBy, me, qaList, onClose, onUpdate }: {
     <div className="absolute top-0 right-0 w-72 h-full bg-white border-l border-[#E8E6E1] flex flex-col z-10 shadow-xl animate-fade-in">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#E8E6E1]">
         <h3 className="font-semibold text-sm">Group info</h3>
-        <button onClick={onClose} className="p-1 rounded-md hover:bg-[#F5F4F1] text-[#111]/40 transition-colors"><X size={14} /></button>
+        <div className="flex items-center gap-1">
+          {isCreator && (
+            <button onClick={async () => {
+              if (!confirm('Delete this group chat? This cannot be undone.')) return
+              await supabase.from('group_messages').delete().eq('group_id', groupId)
+              await supabase.from('group_conversations').delete().eq('id', groupId)
+              onClose()
+              onUpdate()
+            }} className="p-1 rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors" title="Delete group">
+              <Trash2 size={13} />
+            </button>
+          )}
+          <button onClick={onClose} className="p-1 rounded-md hover:bg-[#F5F4F1] text-[#111]/40 transition-colors"><X size={14} /></button>
+        </div>
       </div>
 
       {loading ? (
@@ -238,13 +252,17 @@ function MessagesInner() {
 
   // ── Mark read - updates DB AND local state immediately ────────────────────
   const markRead = useCallback(async (convId: string, uid: string) => {
-    await supabase.from('messages')
+    // Update local state first (optimistic)
+    setConvs(prev => prev.map(c => c.id === convId ? { ...c, unread: 0 } : c))
+    // Then persist to DB
+    const { error } = await supabase.from('messages')
       .update({ read: true })
       .eq('conversation_id', convId)
       .neq('sender_id', uid)
       .eq('read', false)
-    // Update sidebar unread count instantly
-    setConvs(prev => prev.map(c => c.id === convId ? { ...c, unread: 0 } : c))
+    if (error) {
+      console.error('markRead failed:', error)
+    }
   }, [])
 
   // ── Load convs ────────────────────────────────────────────────────────────
@@ -274,7 +292,13 @@ function MessagesInner() {
         .neq('sender_id', uid)
       return { ...c, other, last, unread: unread || 0 }
     }))
-    setConvs(enriched)
+    // If we have an active conv open, make sure its unread is 0
+    if (activeRef.current?.type === 'direct') {
+      const activeId = activeRef.current.id
+      setConvs(enriched.map(c => c.id === activeId ? { ...c, unread: 0 } : c))
+    } else {
+      setConvs(enriched)
+    }
   }, [])
 
   const loadGroups = useCallback(async (uid: string) => {
@@ -359,29 +383,31 @@ function MessagesInner() {
       setLoading(false)
 
       // ── Presence channel ──
-      const presence = supabase.channel('presence:hhub-global')
+      const presenceChannelName = `presence:hhub:${Date.now()}`
+      const presence = supabase.channel(presenceChannelName, {
+        config: { presence: { key: u.id } }
+      })
         .on('presence', { event: 'sync' }, () => {
-          const ids = new Set(
-            Object.values(presence.presenceState()).flat().map((x: any) => x.user_id as string)
-          )
+          const state = presence.presenceState()
+          const ids = new Set<string>()
+          Object.keys(state).forEach(key => {
+            const presences = state[key] as any[]
+            presences.forEach(p => { if (p.user_id) ids.add(p.user_id) })
+          })
           setOnline(ids)
         })
-        .on('presence', { event: 'join' }, ({ newPresences }) => {
-          setOnline(prev => {
-            const next = new Set(prev)
-            newPresences.forEach((p: any) => next.add(p.user_id))
-            return next
-          })
+        .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+          const uid = (newPresences as any[])[0]?.user_id || key
+          if (uid) setOnline(prev => new Set([...prev, uid]))
         })
-        .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-          setOnline(prev => {
-            const next = new Set(prev)
-            leftPresences.forEach((p: any) => next.delete(p.user_id))
-            return next
-          })
+        .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+          const uid = (leftPresences as any[])[0]?.user_id || key
+          if (uid) setOnline(prev => { const s = new Set(prev); s.delete(uid); return s })
         })
         .subscribe(async status => {
-          if (status === 'SUBSCRIBED') await presence.track({ user_id: u.id })
+          if (status === 'SUBSCRIBED') {
+            await presence.track({ user_id: u.id, online_at: new Date().toISOString() })
+          }
         })
 
       // Auto-open from profile
@@ -899,9 +925,14 @@ function MessagesInner() {
                     onClose={() => setShowInfo(false)}
                     onUpdate={async () => {
                       await loadGroups(me.id)
-                      // Refresh active meta
+                      // Check if group still exists
                       const { data: g } = await supabase.from('group_conversations').select('*').eq('id', active.id).single()
-                      if (g) {
+                      if (!g) {
+                        // Group was deleted - clear active
+                        setActive(null)
+                        setShowInfo(false)
+                        activeRef.current = null
+                      } else {
                         const memberIds: string[] = Array.isArray(g.member_ids) ? g.member_ids : []
                         setActive(prev => prev ? { ...prev, meta: { ...g, memberIds, memberCount: memberIds.length } } : prev)
                       }

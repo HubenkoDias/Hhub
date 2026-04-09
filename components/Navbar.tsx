@@ -13,6 +13,7 @@ export default function Navbar() {
   const [mobile,     setMobile]     = useState(false)
   const [userMenu,   setUserMenu]   = useState(false)
   const [notifCount, setNotifCount] = useState(0)
+  const [msgCount,   setMsgCount]   = useState(0)
   const [scrolled,   setScrolled]   = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -30,6 +31,20 @@ export default function Navbar() {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', session.user.id).eq('read', false)
       setNotifCount(count || 0)
+
+      // Count unread messages
+      const { data: userConvs } = await supabase.from('conversations')
+        .select('id')
+        .or(`participant_1.eq.${session.user.id},participant_2.eq.${session.user.id}`)
+      if (userConvs && userConvs.length > 0) {
+        const convIds = userConvs.map((c: any) => c.id)
+        const { count: unread } = await supabase.from('messages')
+          .select('*', { count: 'exact', head: true })
+          .in('conversation_id', convIds)
+          .eq('read', false)
+          .neq('sender_id', session.user.id)
+        setMsgCount(unread || 0)
+      }
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange((_, session) => {
@@ -103,19 +118,25 @@ export default function Navbar() {
             ) : user ? (
               // Logged in
               <div className="flex items-center gap-1">
-                {[
-                  { href: '/messages',      icon: MessageSquare, title: 'Messages' },
-                  { href: '/favorites',     icon: Heart,         title: 'Saved' },
-                ].map(({ href, icon: Icon, title }) => (
-                  <Link key={href} href={href} title={title}
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 ${
-                      solid
-                        ? 'text-[#111]/50 hover:text-[#111] hover:bg-[#111]/8'
-                        : 'text-white/60 hover:text-white hover:bg-white/12'
-                    }`}>
-                    <Icon size={16} />
-                  </Link>
-                ))}
+                {/* Messages with unread badge */}
+                <Link href="/messages" title="Messages"
+                  className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 ${
+                    solid ? 'text-[#111]/50 hover:text-[#111] hover:bg-[#111]/8' : 'text-white/60 hover:text-white hover:bg-white/12'
+                  }`}>
+                  <MessageSquare size={16} />
+                  {msgCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 bg-[#C8473A] text-white text-[9px] font-bold min-w-[14px] h-3.5 px-0.5 rounded-full flex items-center justify-center leading-none">
+                      {msgCount > 9 ? '9+' : msgCount}
+                    </span>
+                  )}
+                </Link>
+                {/* Favorites */}
+                <Link href="/favorites" title="Saved"
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 ${
+                    solid ? 'text-[#111]/50 hover:text-[#111] hover:bg-[#111]/8' : 'text-white/60 hover:text-white hover:bg-white/12'
+                  }`}>
+                  <Heart size={16} />
+                </Link>
 
                 {/* Notifications with badge */}
                 <Link href="/notifications" title="Notifications"

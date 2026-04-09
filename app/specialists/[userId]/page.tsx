@@ -169,7 +169,7 @@ export default function SpecialistProfile() {
                   <h2 style={{ fontFamily:'var(--font-display)' }} className="text-xl font-bold mb-4">Certificates</h2>
                   <div className="grid grid-cols-2 gap-3">
                     {certs.map(c => (
-                      <button key={c.id} onClick={() => setCert(c)} className="text-left p-4 bg-[#F5F3EF] rounded-xl border border-[#ECEAE4] hover:border-[#0F0F0F]/20 transition-all hover:-translate-y-0.5 hover:shadow-md">
+                      <button key={c.id} onClick={() => setCert(c)} className="text-left p-4 bg-[#F5F3EF] rounded-xl border border-[#ECEAE4] hover:border-[#111]/20 transition-all hover:-translate-y-0.5 hover:shadow-md group">
                         <div className="flex items-start gap-3">
                           <div className="w-9 h-9 bg-[#0F0F0F]/6 rounded-xl flex items-center justify-center flex-shrink-0"><Award size={16} className="text-[#0F0F0F]/45"/></div>
                           <div className="min-w-0">
@@ -239,7 +239,14 @@ export default function SpecialistProfile() {
               <div className="w-14 h-14 bg-[#0F0F0F]/5 rounded-2xl flex items-center justify-center flex-shrink-0"><Award size={28} className="text-[#0F0F0F]/35"/></div>
               <div><h2 style={{ fontFamily:'var(--font-display)' }} className="text-2xl font-bold">{cert.name}</h2><p className="text-[#0F0F0F]/50 text-sm">{cert.issuer}</p></div>
             </div>
-            {cert.image_url && <img src={cert.image_url} className="w-full rounded-2xl border border-[#ECEAE4] mb-5 object-contain max-h-64" alt="Certificate"/>}
+            {cert.image_url && (
+              <button onClick={() => setLightboxImg(cert.image_url)} className="w-full mb-5 group relative block">
+                <img src={cert.image_url} className="w-full rounded-2xl border border-[#ECEAE4] object-contain max-h-64 group-hover:opacity-90 transition-opacity" alt="Certificate"/>
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-full font-medium">Click to enlarge</span>
+                </div>
+              </button>
+            )}
             <div className="grid grid-cols-2 gap-4 mb-4">
               {cert.certificate_id && <div className="bg-[#F5F3EF] rounded-xl p-3"><p className="text-xs font-mono text-[#0F0F0F]/35 uppercase tracking-widest mb-1">Certificate ID</p><p className="text-sm font-mono font-medium">{cert.certificate_id}</p></div>}
               {cert.issued_date && <div className="bg-[#F5F3EF] rounded-xl p-3"><p className="text-xs font-mono text-[#0F0F0F]/35 uppercase tracking-widest mb-1">Issued</p><p className="text-sm font-medium">{new Date(cert.issued_date).toLocaleDateString('en-US',{year:'numeric',month:'long'})}</p></div>}
