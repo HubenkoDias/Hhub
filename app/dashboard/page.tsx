@@ -180,7 +180,14 @@ export default function Dashboard() {
                     <input ref={photoRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={async e => {
                       const f=e.target.files?.[0]; if(!f) return
                       const url = await uploadFile(f, 'avatars')
-                      if (url) setQA({...qa, photo_url: url})
+                      if (url) {
+                        setQA({...qa, photo_url: url})
+                        // Save immediately to DB so it persists
+                        await supabase.from('qa_profiles').upsert(
+                          { user_id: user.id, photo_url: url },
+                          { onConflict: 'user_id' }
+                        )
+                      }
                     }}/>
                   </div>
                 </div>
@@ -281,7 +288,14 @@ export default function Dashboard() {
                       const f=e.target.files?.[0]; if(!f) return
                       if (f.size > 2*1024*1024) { alert('Max 2MB'); return }
                       const url = await uploadFile(f, 'company-logos')
-                      if (url) setCo({...co, logo_url: url})
+                      if (url) {
+                        setCo({...co, logo_url: url})
+                        // Save immediately to DB
+                        await supabase.from('company_profiles').upsert(
+                          { user_id: user.id, logo_url: url },
+                          { onConflict: 'user_id' }
+                        )
+                      }
                     }}/>
                   </div>
                 </div>

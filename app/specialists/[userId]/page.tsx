@@ -34,7 +34,13 @@ export default function SpecialistProfile() {
       }
     })
 
-    supabase.from('qa_profiles').select('*').eq('user_id', userId).single().then(async ({ data, error }) => {
+    // Support both UUID and slug in URL
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)
+    const query = isUUID
+      ? supabase.from('qa_profiles').select('*').eq('user_id', userId)
+      : supabase.from('qa_profiles').select('*').eq('slug', userId)
+
+    query.single().then(async ({ data, error }) => {
       if (error || !data) { setLoading(false); return }
       setProfile(data)
       const [{ data: cs }, { data: pf }, { data: revs }] = await Promise.all([

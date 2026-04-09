@@ -358,3 +358,71 @@ DROP POLICY IF EXISTS "Admin read all companies" ON company_profiles;
 CREATE POLICY "Admin read all companies" ON company_profiles FOR SELECT USING (
   EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role = 'admin')
 );
+
+-- ============================================
+-- V7 ADDITIONS
+-- ============================================
+
+-- Slugs for clean URLs
+ALTER TABLE qa_profiles ADD COLUMN IF NOT EXISTS slug TEXT UNIQUE;
+ALTER TABLE company_profiles ADD COLUMN IF NOT EXISTS slug TEXT UNIQUE;
+
+-- Function to auto-generate slug from full_name
+CREATE OR REPLACE FUNCTION generate_qa_slug()
+RETURNS TRIGGER AS $$
+DECLARE
+  base_slug TEXT;
+  final_slug TEXT;
+  counter INTEGER := 1;
+BEGIN
+  IF NEW.full_name IS NOT NULL AND (NEW.slug IS NULL OR NEW.slug = '') THEN
+    base_slug := lower(regexp_replace(trim(NEW.full_name), '[^a-zA-Z0-9\s]', '', 'g'));
+    base_slug := regexp_replace(base_slug, '\s+', '-', 'g');
+    final_slug := base_slug;
+    WHILE EXISTS (SELECT 1 FROM qa_profiles WHERE slug = final_slug AND user_id != NEW.user_id) LOOP
+      final_slug := base_slug || '-' || counter;
+      counter := counter + 1;
+    END LOOP;
+    NEW.slug := final_slug;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS qa_profile_slug ON qa_profiles;
+CREATE TRIGGER qa_profile_slug BEFORE INSERT OR UPDATE ON qa_profiles
+  FOR EACH ROW EXECUTE FUNCTION generate_qa_slug();
+
+-- Same for companies
+CREATE OR REPLACE FUNCTION generate_company_slug()
+RETURNS TRIGGER AS $$
+DECLARE
+  base_slug TEXT;
+  final_slug TEXT;
+  counter INTEGER := 1;
+BEGIN
+  IF NEW.company_name IS NOT NULL AND (NEW.slug IS NULL OR NEW.slug = '') THEN
+    base_slug := lower(regexp_replace(trim(NEW.company_name), '[^a-zA-Z0-9\s]', '', 'g'));
+    base_slug := regexp_replace(base_slug, '\s+', '-', 'g');
+    final_slug := base_slug;
+    WHILE EXISTS (SELECT 1 FROM company_profiles WHERE slug = final_slug AND user_id != NEW.user_id) LOOP
+      final_slug := base_slug || '-' || counter;
+      counter := counter + 1;
+    END LOOP;
+    NEW.slug := final_slug;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS company_profile_slug ON company_profiles;
+CREATE TRIGGER company_profile_slug BEFORE INSERT OR UPDATE ON company_profiles
+  FOR EACH ROW EXECUTE FUNCTION generate_company_slug();
+
+-- deleted column for messages
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted BOOLEAN DEFAULT FALSE;
+ALTER TABLE group_messages ADD COLUMN IF NOT EXISTS deleted BOOLEAN DEFAULT FALSE;
+
+-- Backfill existing slugs
+UPDATE qa_profiles SET full_name = full_name WHERE full_name IS NOT NULL AND slug IS NULL;
+UPDATE company_profiles SET company_name = company_name WHERE company_name IS NOT NULL AND slug IS NULL;
