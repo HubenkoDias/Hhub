@@ -32,8 +32,8 @@ function fmtDate(ts: string) {
 }
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
-function Avatar({ name, photo, online = false, size = 9 }: {
-  name: string; photo?: string | null; online?: boolean; size?: number
+function Avatar({ name, photo, online = false, showStatus = false, size = 9 }: {
+  name: string; photo?: string | null; online?: boolean; showStatus?: boolean; size?: number
 }) {
   return (
     <div className={`w-${size} h-${size} rounded-lg bg-[#E8E6E1] overflow-hidden flex-shrink-0 flex items-center justify-center relative`}>
@@ -41,7 +41,9 @@ function Avatar({ name, photo, online = false, size = 9 }: {
         ? <img src={photo} className="w-full h-full object-cover" alt={name} />
         : <span className="text-xs font-bold text-[#111]/40 uppercase">{name?.[0] || '?'}</span>
       }
-      {online && <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white" />}
+      {showStatus && (
+        <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${online ? 'bg-emerald-500' : 'bg-[#C5C1B8]'}`} />
+      )}
     </div>
   )
 }
@@ -72,7 +74,14 @@ function GroupInfoPanel({
 
   const removeMember = async (uid: string) => {
     if (!isCreator || uid === me?.id) return
-    const newIds = (group.member_ids as string[]).filter((id: string) => id !== uid)
+    // Fetch fresh data first
+    const { data: fresh } = await supabase
+      .from('group_conversations')
+      .select('member_ids')
+      .eq('id', group.id)
+      .single()
+    const current: string[] = Array.isArray(fresh?.member_ids) ? fresh.member_ids : []
+    const newIds = current.filter((id: string) => id !== uid)
     await supabase.from('group_conversations').update({ member_ids: newIds }).eq('id', group.id)
     setMembers(m => m.filter(p => p.user_id !== uid))
     onUpdate()
@@ -80,7 +89,13 @@ function GroupInfoPanel({
 
   const addMember = async (uid: string) => {
     if (!isCreator) return
-    const current: string[] = Array.isArray(group.member_ids) ? group.member_ids : []
+    // Always fetch fresh data from DB to avoid stale member_ids
+    const { data: fresh } = await supabase
+      .from('group_conversations')
+      .select('member_ids')
+      .eq('id', group.id)
+      .single()
+    const current: string[] = Array.isArray(fresh?.member_ids) ? fresh.member_ids : []
     if (current.includes(uid)) return
     const newIds = [...current, uid]
     await supabase.from('group_conversations').update({ member_ids: newIds }).eq('id', group.id)
@@ -631,7 +646,7 @@ function MessagesInner() {
                   return (
                     <button key={c.id} onClick={() => openDirect(c.id, c.other)}
                       className={`w-full flex items-center gap-2.5 px-3 py-2.5 border-b border-[#F0EDE8] text-left transition-colors ${isActive ? 'bg-[#F0EDE8]' : 'hover:bg-[#F8F7F5]'}`}>
-                      <Avatar name={c.other.display_name} photo={c.other.photo_url} online={online.has(c.other.user_id)} />
+                      <Avatar name={c.other.display_name} photo={c.other.photo_url} online={online.has(c.other.user_id)} showStatus />
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-baseline gap-1">
                           <p className={`text-sm truncate ${c.unread > 0 ? 'font-semibold text-[#111]' : 'font-medium text-[#111]/75'}`}>{c.other.display_name}</p>
@@ -759,7 +774,7 @@ function MessagesInner() {
                   </button>
                   {active.type === 'group'
                     ? <div className="w-9 h-9 rounded-lg bg-[#111] flex items-center justify-center flex-shrink-0"><Users size={15} className="text-white" /></div>
-                    : <Avatar name={activeMeta.other.display_name} photo={activeMeta.other.photo_url} online={online.has(activeMeta.other.user_id)} />
+                    : <Avatar name={activeMeta.other.display_name} photo={activeMeta.other.photo_url} online={online.has(activeMeta.other.user_id)} showStatus />
                   }
                   <div className="flex-1 min-w-0">
                     {active.type === 'group'
@@ -817,15 +832,6 @@ function MessagesInner() {
                               <p className="text-[10px] text-[#111]/40 font-medium mb-0.5 px-1">{senderName}</p>
                             )}
 
-                            {/* Delete button on hover */}
-                            {canDelete && hoveredMsg === m.id && (
-                              <button onClick={() => deleteMsg(m)}
-                                className={`mb-1 p-1 rounded-md bg-white border border-[#E8E6E1] text-red-400 hover:text-red-600 hover:bg-red-50 shadow-sm transition-colors ${isMe ? 'self-end' : 'self-start'}`}
-                                title="Delete message">
-                                <Trash2 size={11} />
-                              </button>
-                            )}
-
                             <div className={`rounded-2xl px-3.5 py-2.5 max-w-full ${
                               m.deleted
                                 ? 'bg-[#F0EDE8] text-[#111]/30 italic'
@@ -860,6 +866,13 @@ function MessagesInner() {
                               </span>
                               {isMe && active.type === 'direct' && !m.deleted && (
                                 m.read ? <CheckCheck size={11} className="text-blue-500" /> : <Check size={11} className="text-[#111]/25" />
+                              )}
+                              {canDelete && hoveredMsg === m.id && (
+                                <button onClick={() => deleteMsg(m)}
+                                  className="p-0.5 rounded text-red-400 hover:text-red-600 transition-colors ml-1"
+                                  title="Delete message">
+                                  <Trash2 size={10} />
+                                </button>
                               )}
                             </div>
                           </div>

@@ -27,15 +27,16 @@ export default function BrowseSpecialists() {
   const [ratings,    setRatings]    = useState<Record<string, number>>({})
   const locRef = useRef<HTMLDivElement>(null)
 
-  // Auto-apply filters when they change
+  // Auto-apply filters when they change - debounced for text inputs
   useEffect(() => {
-    load()
+    const timer = setTimeout(() => { load() }, 300)
+    return () => clearTimeout(timer)
   }, [avail, minRate, maxRate, location, skills])
 
   useEffect(() => {
     load()
     // Load all unique locations for autocomplete
-    supabase.from('qa_profiles').select('location').eq('verification_status', 'verified').eq('is_public', true)
+    supabase.from('qa_profiles').select('location').eq('verification_status', 'verified')
       .then(({ data }) => {
         const locs = [...new Set((data || []).map(r => r.location).filter(Boolean))] as string[]
         setAllLocations(locs)
@@ -70,7 +71,7 @@ export default function BrowseSpecialists() {
 
   const load = async () => {
     setLoading(true)
-    let q = supabase.from('qa_profiles').select('*').eq('verification_status', 'verified').eq('is_public', true)
+    let q = supabase.from('qa_profiles').select('*').eq('verification_status', 'verified')
     if (avail)   q = q.eq('availability', avail)
     if (minRate) q = q.gte('hourly_rate', parseInt(minRate))
     if (maxRate) q = q.lte('hourly_rate', parseInt(maxRate))

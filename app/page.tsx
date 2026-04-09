@@ -89,18 +89,14 @@ export default function Home() {
     })
   }, [])
 
-  // Featured from real data, fallback to examples
-  const FEATURED = featuredSpecs.length > 0 ? featuredSpecs.map(s => ({
+  // Featured specialists - only real verified users, no fake data
+  const FEATURED = featuredSpecs.map(s => ({
     name: s.full_name || 'QA Specialist',
     role: s.title || 'QA Engineer',
-    skills: (s.skills || []).slice(0,3),
-    rate: s.hourly_rate ? `$${s.hourly_rate}/hr` : '',
+    skills: (s.skills || []).slice(0, 3),
+    rate: s.hourly_rate ? `$${'$'}{s.hourly_rate}/hr` : '',
     userId: s.user_id,
-  })) : [
-    { name:'Alex M.', role:'Senior QA Engineer', skills:['Cypress','API Testing','CI/CD'], rate:'$65/hr', userId: null },
-    { name:'Sarah K.', role:'Automation Lead', skills:['Playwright','Python','Docker'], rate:'$80/hr', userId: null },
-    { name:'John D.', role:'QA Analyst', skills:['Manual Testing','JIRA','Agile'], rate:'$45/hr', userId: null },
-  ]
+  }))
 
   return (
     <>
@@ -141,7 +137,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Featured specialists - flip cards */}
+            {/* Featured specialists - only shown if real data exists */}
+            {FEATURED.length > 0 && (
             <div className="hidden md:flex flex-col gap-3 animate-fade-up d3">
               <p className="text-white/25 text-xs font-mono tracking-widest uppercase mb-1">Featured specialists</p>
               {FEATURED.map((s, i) => (
@@ -178,6 +175,7 @@ export default function Home() {
                 Browse all specialists <ArrowRight size={12}/>
               </Link>
             </div>
+            )}
           </div>
         </section>
 
@@ -327,7 +325,8 @@ export default function Home() {
 
 function CTAButtons() {
   const [user, setUser] = useState<any>(undefined)
-  const [role, setRole] = useState<string|null>(null)
+  const [role, setRole] = useState<string | null>(null)
+
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { setUser(null); return }
@@ -336,21 +335,30 @@ function CTAButtons() {
       if (p) setRole(p.role)
     })
   }, [])
+
   if (user === undefined) return null
-  if (user && role === 'qa') return (
-    <Link href="/browse/specialists" className="bg-white text-[#C8473A] px-8 py-4 rounded-full font-bold text-base hover:bg-white/90 transition-all hover:scale-[1.02] inline-flex items-center gap-2">
-      Browse specialists <ArrowRight size={18}/>
-    </Link>
+
+  if (user && (role === 'qa' || role === 'admin')) return (
+    <>
+      <Link href="/browse/specialists" className="bg-white text-[#C8473A] px-8 py-4 rounded-full font-bold text-base hover:bg-white/90 transition-all hover:scale-[1.02] inline-flex items-center gap-2">
+        Find QA colleagues <ArrowRight size={18} />
+      </Link>
+      <Link href="/browse/companies" className="border-2 border-white/40 text-white px-8 py-4 rounded-full font-medium text-base hover:bg-white/10 transition-all inline-flex items-center gap-2">
+        Browse companies
+      </Link>
+    </>
   )
+
   if (user && role === 'company') return (
     <Link href="/browse/specialists" className="bg-white text-[#C8473A] px-8 py-4 rounded-full font-bold text-base hover:bg-white/90 transition-all hover:scale-[1.02] inline-flex items-center gap-2">
-      Hire testers <ArrowRight size={18}/>
+      Hire QA testers <ArrowRight size={18} />
     </Link>
   )
+
   return (
     <>
       <Link href="/browse/specialists" className="bg-white text-[#C8473A] px-8 py-4 rounded-full font-bold text-base hover:bg-white/90 transition-all hover:scale-[1.02] inline-flex items-center gap-2">
-        Hire testers <ArrowRight size={18}/>
+        Find QA talent <ArrowRight size={18} />
       </Link>
       <Link href="/auth/register?role=qa" className="border-2 border-white/40 text-white px-8 py-4 rounded-full font-medium text-base hover:bg-white/10 transition-all inline-flex items-center gap-2">
         Join as QA specialist
@@ -362,7 +370,8 @@ function CTAButtons() {
 
 function HeroButtons() {
   const [user, setUser] = useState<any>(undefined)
-  const [role, setRole] = useState<string|null>(null)
+  const [role, setRole] = useState<string | null>(null)
+
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { setUser(null); return }
@@ -372,38 +381,37 @@ function HeroButtons() {
     })
   }, [])
 
-  if (user === undefined) return <div className="h-14 w-64 bg-white/5 rounded-full animate-pulse"/>
+  if (user === undefined) return <div className="h-14 w-64 bg-white/5 rounded-full animate-pulse" />
 
-  if (user) {
-    // Logged in as QA: show Browse Companies
-    if (role === 'qa' || role === 'admin') return (
-      <>
-        <Link href="/browse/companies" className="btn-accent text-base px-8 py-4 rounded-full">
-          Find companies <ArrowRight size={18}/>
-        </Link>
-        <Link href="/dashboard" className="inline-flex items-center gap-2 bg-white/8 text-white border border-white/15 px-8 py-4 rounded-full font-medium text-base hover:bg-white/14 transition-all">
-          My profile
-        </Link>
-      </>
-    )
-    // Logged in as Company: show Hire testers
-    return (
-      <>
-        <Link href="/browse/specialists" className="btn-accent text-base px-8 py-4 rounded-full">
-          Hire testers <ArrowRight size={18}/>
-        </Link>
-        <Link href="/dashboard" className="inline-flex items-center gap-2 bg-white/8 text-white border border-white/15 px-8 py-4 rounded-full font-medium text-base hover:bg-white/14 transition-all">
-          My profile
-        </Link>
-      </>
-    )
-  }
+  // Logged in as QA or Admin - community-focused
+  if (user && (role === 'qa' || role === 'admin')) return (
+    <>
+      <Link href="/browse/specialists" className="btn-accent text-base px-8 py-4 rounded-full">
+        Find QA colleagues <ArrowRight size={18} />
+      </Link>
+      <Link href="/browse/companies" className="inline-flex items-center gap-2 bg-white/8 text-white border border-white/15 px-8 py-4 rounded-full font-medium text-base hover:bg-white/14 transition-all">
+        Browse companies
+      </Link>
+    </>
+  )
 
-  // Not logged in: show both options
+  // Logged in as Company
+  if (user && role === 'company') return (
+    <>
+      <Link href="/browse/specialists" className="btn-accent text-base px-8 py-4 rounded-full">
+        Hire QA testers <ArrowRight size={18} />
+      </Link>
+      <Link href="/dashboard" className="inline-flex items-center gap-2 bg-white/8 text-white border border-white/15 px-8 py-4 rounded-full font-medium text-base hover:bg-white/14 transition-all">
+        My profile
+      </Link>
+    </>
+  )
+
+  // Not logged in
   return (
     <>
       <Link href="/browse/specialists" className="btn-accent text-base px-8 py-4 rounded-full">
-        Hire testers <ArrowRight size={18}/>
+        Find QA talent <ArrowRight size={18} />
       </Link>
       <Link href="/auth/register?role=qa" className="inline-flex items-center gap-2 bg-white/8 text-white border border-white/15 px-8 py-4 rounded-full font-medium text-base hover:bg-white/14 transition-all">
         Join as QA

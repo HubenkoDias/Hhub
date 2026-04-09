@@ -37,7 +37,26 @@ export default function Dashboard() {
       if (!session?.user) { router.push('/auth/login'); return }
       setUser(session.user)
       const { data: p } = await supabase.from('profiles').select('role').eq('user_id', session.user.id).single()
-      if (!p) { router.push('/auth/login'); return }
+      // Don't redirect if profile row missing - it may be a timing issue after registration
+      // Try to wait briefly and retry once
+      if (!p) {
+        await new Promise(r => setTimeout(r, 1000))
+        const { data: p2 } = await supabase.from('profiles').select('role').eq('user_id', session.user.id).single()
+        if (!p2) { router.push('/auth/register'); return }
+        setRole(p2.role)
+        // Continue loading with p2
+        const userId = session.user.id
+        if (p2.role === 'qa' || p2.role === 'admin') {
+          const { data: q } = await supabase.from('qa_profiles').select('*').eq('user_id', userId).single()
+          setQA(q || { skills: [], availability: 'freelance', full_name:'', title:'', bio:'', years_experience:0, location:'', linkedin_url:'', github_url:'' })
+        }
+        if (p2.role === 'company') {
+          const { data: c } = await supabase.from('company_profiles').select('*').eq('user_id', userId).single()
+          setCo(c || {})
+        }
+        setLoading(false)
+        return
+      }
       setRole(p.role)
       if (p.role === 'qa' || p.role === 'admin') {
         const { data: q } = await supabase.from('qa_profiles').select('*').eq('user_id', session.user.id).single()
