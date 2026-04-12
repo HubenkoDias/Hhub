@@ -48,6 +48,7 @@ export default function Onboarding() {
       // Check if already completed onboarding
       const { data: qa } = await supabase.from('qa_profiles').select('full_name, onboarding_completed').eq('user_id', u.id).single()
       if (qa?.onboarding_completed) { router.push('/dashboard'); return }
+      // Pre-fill name from registration (already entered first/last name)
       if (qa?.full_name) setFullName(qa.full_name)
 
       setLoading(false)
@@ -206,6 +207,7 @@ export default function Onboarding() {
                   <div>
                     <label className="label">Full name *</label>
                     <input className="input" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="John Smith" />
+                    {fullName && <p className="text-xs text-emerald-600 mt-1">✓ From registration</p>}
                   </div>
                   <div>
                     <label className="label">Job title *</label>

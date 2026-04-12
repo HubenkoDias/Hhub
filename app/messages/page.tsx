@@ -675,10 +675,26 @@ function MessagesInner() {
                   return (
                     <button key={c.id} onClick={() => openDirect(c.id, c.other)}
                       className={`w-full flex items-center gap-2.5 px-3 py-2.5 border-b border-[#F0EDE8] text-left transition-colors ${isActive ? 'bg-[#F0EDE8]' : 'hover:bg-[#F8F7F5]'}`}>
-                      <Avatar name={c.other.display_name} photo={c.other.photo_url} online={online.has(c.other.user_id)} showStatus />
+                      <div className="relative flex-shrink-0">
+                        <Avatar name={c.other.display_name} photo={c.other.photo_url} online={online.has(c.other.user_id)} showStatus />
+                        {/* Role indicator dot */}
+                        <div className={`absolute -top-1 -left-1 w-3.5 h-3.5 rounded-full border-2 border-white flex items-center justify-center ${
+                          c.other.role === 'company' ? 'bg-blue-500' : 'bg-purple-500'
+                        }`}>
+                          {c.other.role === 'company'
+                            ? <span className="text-[6px] text-white font-bold leading-none">C</span>
+                            : <span className="text-[6px] text-white font-bold leading-none">Q</span>
+                          }
+                        </div>
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-baseline gap-1">
-                          <p className={`text-sm truncate ${c.unread > 0 ? 'font-semibold text-[#111]' : 'font-medium text-[#111]/75'}`}>{c.other.display_name}</p>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <p className={`text-sm truncate ${c.unread > 0 ? 'font-semibold text-[#111]' : 'font-medium text-[#111]/75'}`}>{c.other.deleted ? 'Deleted User' : c.other.display_name}</p>
+                            <span className={`text-[9px] font-semibold px-1 py-0.5 rounded flex-shrink-0 ${c.other.role === 'company' ? 'bg-blue-100 text-blue-600' : c.other.deleted ? 'bg-[#F0EDE8] text-[#111]/30' : 'bg-purple-100 text-purple-600'}`}>
+                              {c.other.deleted ? 'deleted' : c.other.role === 'company' ? 'co' : 'qa'}
+                            </span>
+                          </div>
                           <span className="text-[10px] text-[#111]/30 flex-shrink-0">{fmtShort(c.last?.created_at || c.created_at)}</span>
                         </div>
                         <div className="flex items-center justify-between gap-1">
@@ -792,7 +808,14 @@ function MessagesInner() {
                   <div className="flex-1 min-w-0">
                     {active.type === 'group'
                       ? <p className="font-semibold text-sm">{activeMeta.name}</p>
-                      : <Link href={profileLink(activeMeta.other)} className="font-semibold text-sm hover:text-[#C8473A] transition-colors">{activeMeta.other.display_name}</Link>
+                      : activeMeta.other?.deleted
+                        ? <span className="font-semibold text-sm text-[#111]/40 italic">Deleted User</span>
+                        : <div className="flex items-center gap-2">
+                            <Link href={profileLink(activeMeta.other)} className="font-semibold text-sm hover:text-[#C8473A] transition-colors">{activeMeta.other.display_name}</Link>
+                            <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${activeMeta.other.role === 'company' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                              {activeMeta.other.role === 'company' ? 'Company' : 'QA'}
+                            </span>
+                          </div>
                     }
                     <p className="text-xs text-[#111]/40">
                       {active.type === 'group'

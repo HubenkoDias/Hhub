@@ -5,29 +5,36 @@ export interface UserProfile {
   display_name: string
   photo_url: string | null
   sub: string
-  role: 'qa' | 'company' | 'admin'
+  role: 'qa' | 'company' | 'admin' | 'deleted'
   slug?: string
+  deleted?: boolean
 }
 
-// Cache only real names, not defaults
 const cache = new Map<string, UserProfile>()
 
 export async function fetchProfile(uid: string): Promise<UserProfile> {
+  const DELETED: UserProfile = {
+    user_id: uid, display_name: 'Deleted User',
+    photo_url: null, sub: '', role: 'deleted', deleted: true
+  }
+
+  // Return cached only if real name
   const cached = cache.get(uid)
-  // Return cache only if we have a real display name
-  if (cached && cached.display_name && !['QA Specialist', 'Company', 'Unknown', 'User'].includes(cached.display_name)) {
+  if (cached && cached.display_name && !['QA Specialist', 'Company', 'Unknown', 'User', 'Deleted User'].includes(cached.display_name)) {
     return cached
   }
 
   try {
-    // Get role
-    const { data: prof } = await supabase
+    const { data: prof, error: profError } = await supabase
       .from('profiles')
       .select('role')
       .eq('user_id', uid)
       .single()
 
-    const role = (prof?.role || 'qa') as 'qa' | 'company' | 'admin'
+    // User deleted or not found
+    if (profError || !prof) return DELETED
+
+    const role = prof.role as 'qa' | 'company' | 'admin'
 
     if (role === 'company') {
       const { data: co } = await supabase
@@ -48,40 +55,31 @@ export async function fetchProfile(uid: string): Promise<UserProfile> {
       return result
     }
 
-    // QA or Admin - get from qa_profiles
+    // QA or Admin
     const { data: qa } = await supabase
       .from('qa_profiles')
       .select('full_name, photo_url, title, slug')
       .eq('user_id', uid)
       .single()
 
-    // Fallback: get email from auth if no full_name
-    let displayName = qa?.full_name || ''
-    if (!displayName) {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user?.id === uid && user?.email) {
-        displayName = user.email.split('@')[0]
-      }
-    }
-
     const result: UserProfile = {
       user_id: uid,
-      display_name: displayName || 'QA Specialist',
+      display_name: qa?.full_name || 'QA Specialist',
       photo_url: qa?.photo_url || null,
       sub: qa?.title || '',
       role,
       slug: qa?.slug || undefined,
     }
-
-    if (displayName && displayName !== 'QA Specialist') cache.set(uid, result)
+    if (qa?.full_name) cache.set(uid, result)
     return result
 
   } catch {
-    return { user_id: uid, display_name: 'User', photo_url: null, sub: '', role: 'qa' }
+    return DELETED
   }
 }
 
 export function profileLink(p: UserProfile): string {
+  if (p.deleted) return '#'
   const id = p.slug || p.user_id
   return p.role === 'company' ? `/companies/${id}` : `/specialists/${id}`
 }

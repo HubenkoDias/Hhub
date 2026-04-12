@@ -30,10 +30,14 @@ export default function PostJob() {
 
   const toggleSkill = (s: string) => setForm(f => ({ ...f, skills: f.skills.includes(s) ? f.skills.filter(x => x !== s) : [...f.skills, s] }))
 
+  const [err, setErr] = useState('')
+
   const submit = async () => {
     if (!form.title.trim() || !form.description.trim()) return
+    if (!user) { router.push('/auth/login'); return }
+    setErr('')
     setBusy(true)
-    const { data } = await supabase.from('job_postings').insert({
+    const { data, error } = await supabase.from('job_postings').insert({
       company_id: user.id,
       title: form.title.trim(),
       description: form.description.trim(),
@@ -46,8 +50,10 @@ export default function PostJob() {
       salary_max: parseInt(form.salary_max) || null,
       currency: form.currency,
       is_active: true,
+      applications_count: 0,
     }).select().single()
     setBusy(false)
+    if (error) { setErr(error.message); return }
     if (data) router.push(`/jobs/${data.id}`)
   }
 
@@ -116,6 +122,7 @@ export default function PostJob() {
               </div>
             </div>
 
+            {err && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">{err}</div>}
             <button onClick={submit} disabled={busy || !form.title.trim() || !form.description.trim()} className="btn-accent w-full justify-center disabled:opacity-50">
               {busy ? 'Publishing…' : 'Publish job posting'}
             </button>

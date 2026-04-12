@@ -20,6 +20,7 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let cleanup: (() => void) | undefined
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { router.push('/auth/login'); return }
       const { data: ns } = await supabase.from('notifications')

@@ -218,7 +218,7 @@ export default function SpecialistProfile() {
                 <div className="card">
                   <div className="flex items-center justify-between mb-4">
                     <h2 style={{ fontFamily:'var(--font-display)' }} className="text-xl font-bold">Reviews</h2>
-                    {me && !isOwn && (
+                    {me && !isOwn && myRole === 'company' && (
                       <button onClick={() => setShowReview(!showReview)} className="text-sm text-[#C8473A] hover:underline font-medium">
                         {myReview ? 'Edit review' : '+ Write review'}
                       </button>

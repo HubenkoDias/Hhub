@@ -44,7 +44,13 @@ export default function CompanyProfile() {
     })
 
     // Load company
-    supabase.from('company_profiles').select('*').eq('user_id', userId).single().then(async ({ data }) => {
+    // Support both UUID and slug
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)
+    const query = isUUID
+      ? supabase.from('company_profiles').select('*').eq('user_id', userId)
+      : supabase.from('company_profiles').select('*').eq('slug', userId)
+
+    query.single().then(async ({ data }) => {
       if (!data) { setLoading(false); return }
       setProfile(data)
 
@@ -129,7 +135,7 @@ export default function CompanyProfile() {
                   </a>
                 )}
                 {connStatus === 'accepted' && (
-                  <Link href={`/messages?userId=${userId}`}
+                  <Link href={`/messages?userId=${profile.user_id}`}
                     className="inline-flex items-center gap-2 bg-[#C8473A] text-white px-4 py-2 rounded-full text-sm hover:bg-[#B33D31] transition-colors">
                     <MessageSquare size={14}/> Message
                   </Link>
@@ -183,38 +189,8 @@ export default function CompanyProfile() {
               <div className="card">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="font-semibold">Reviews {reviews.length > 0 && `(${reviews.length})`}</h2>
-                  {me && !isOwn && (
-                    <button onClick={() => setShowReview(!showReview)} className="text-sm text-[#C8473A] hover:underline font-medium">
-                      {myReview ? 'Edit review' : '+ Write review'}
-                    </button>
-                  )}
+                  {/* Reviews on companies are written by the company about QA specialists */}
                 </div>
-
-                {showReview && (
-                  <div className="bg-[#F5F4F1] rounded-xl p-4 mb-4 space-y-3 border border-[#E8E6E1]">
-                    <div>
-                      <label className="label">Rating</label>
-                      <div className="flex gap-1">
-                        {[1,2,3,4,5].map(s => (
-                          <button key={s} onClick={() => setMyRating(s)}
-                            className={`text-2xl transition-transform hover:scale-110 ${s <= myRating ? 'text-amber-400' : 'text-[#E8E6E1]'}`}>
-                            ★
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="label">Comment</label>
-                      <textarea className="input resize-none h-20" value={myComment} onChange={e => setMyComment(e.target.value)} placeholder="Share your experience…"/>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={submitReview} disabled={submitting || !myComment.trim()} className="btn-primary text-xs px-4 py-2 disabled:opacity-50">
-                        {submitting ? 'Saving…' : myReview ? 'Update' : 'Submit'}
-                      </button>
-                      <button onClick={() => setShowReview(false)} className="btn-secondary text-xs px-4 py-2">Cancel</button>
-                    </div>
-                  </div>
-                )}
 
                 {reviews.length === 0 ? (
                   <p className="text-sm text-[#111]/35 text-center py-4">No reviews yet</p>
